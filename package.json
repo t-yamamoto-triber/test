@@ -1,0 +1,37 @@
+{
+  "name": "progress-dashboard",
+  "version": "1.0.0",
+  "description": "進捗管理ダッシュボード: Linear + AI + Surge + Slack のパイプライン",
+  "type": "module",
+  "scripts": {
+    "fetch-data": "node scripts/fetch-data.js",
+    "calculate-health": "node scripts/calculate-health.js",
+    "ai-suggestions": "node scripts/generate-ai-suggestions.js",
+    "generate-dashboard": "node scripts/generate-dashboard.js",
+    "deploy": "node scripts/deploy-to-surge.js",
+    "screenshot": "node scripts/take-screenshot.js",
+    "post-slack": "node scripts/post-to-slack.js",
+    "post-slack:dry-run": "DRY_RUN=1 node scripts/post-to-slack.js",
+    "run-all": "npm run fetch-data && npm run calculate-health && npm run ai-suggestions && npm run generate-dashboard && npm run deploy && npm run screenshot && npm run post-slack"
+  },
+  "keywords": [
+    "dashboard",
+    "linear",
+    "slack",
+    "ai",
+    "gemini",
+    "visualization"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@slack/web-api": "^7.0.0",
+    "dotenv": "^17.2.3",
+    "js-yaml": "^4.1.0",
+    "playwright": "^1.50.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

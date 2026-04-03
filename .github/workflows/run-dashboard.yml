@@ -1,0 +1,43 @@
+name: ダッシュボード更新
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 0 * * 1-5'  # 毎朝9時（JST = UTC+9）、平日のみ
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Playwright ブラウザキャッシュ
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: npx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      - run: npx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - run: npm run run-all
+        env:
+          MAGAZINE_LINEAR_API_KEY: ${{ secrets.MAGAZINE_LINEAR_API_KEY }}
+          MAGAZINE_LINEAR_TEAM_KEY: ${{ secrets.MAGAZINE_LINEAR_TEAM_KEY }}
+          MAGAZINE_GEMINI_API_KEY: ${{ secrets.MAGAZINE_GEMINI_API_KEY }}
+          MAGAZINE_SLACK_BOT_TOKEN: ${{ secrets.MAGAZINE_SLACK_BOT_TOKEN }}
+          MAGAZINE_SLACK_CHANNEL_ID: ${{ secrets.MAGAZINE_SLACK_CHANNEL_ID }}
+          MAGAZINE_SURGE_LOGIN: ${{ secrets.MAGAZINE_SURGE_LOGIN }}
+          MAGAZINE_SURGE_TOKEN: ${{ secrets.MAGAZINE_SURGE_TOKEN }}
+          MAGAZINE_SURGE_DOMAIN: ${{ secrets.MAGAZINE_SURGE_DOMAIN }}

@@ -1,0 +1,16 @@
+# Health Indicator Thresholds
+# マガジンステータスダッシュボードの健康度判定閾値
+
+stock:
+  healthy: 8      # ≥8本 = 🟢 順調
+  warning: 5      # 5-7本 = 🟡 注意
+  # <5本 = 🔴 危険
+
+delay:
+  healthy: 0      # 遅延なし = 🟢 順調
+  warning: 1      # 1日 = 🟡 注意
+  # ≥2日 = 🔴 危険
+
+unset_deadline:
+  status: warning     # 期限未設定 = 🟡 注意
+  show_tag: true      # 「期限未設定」タグを表示
