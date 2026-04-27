@@ -9,8 +9,8 @@ data/ai-suggestions.json
 data/deployed-url.txt
 data/stock-tracker.json
 
-output/dashboard.html
-output/screenshot*.png
+output/
+dist-input/
 
 dist/
 
