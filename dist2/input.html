@@ -253,17 +253,17 @@
     <div class="header">
       <div class="date-label" id="today-label">読み込み中...</div>
       <h1>料率（C列）入力</h1>
-      <div class="demo-badge">⚠ 参考データは固定値（後でシートから自動取得）</div>
+      <div class="demo-badge" id="demo-badge">シートからデータ読み込み中...</div>
     </div>
 
     <!-- 参考データ -->
     <div class="ref-grid">
       <div class="ref-item">
-        <div class="ref-label">原価 B列（今日）</div>
+        <div class="ref-label">原価 B列（直近日）</div>
         <div class="ref-value" id="ref-cost">—</div>
       </div>
       <div class="ref-item">
-        <div class="ref-label">計測CV E列（今日）</div>
+        <div class="ref-label">計測CV E列（直近日）</div>
         <div class="ref-value" id="ref-cv">—</div>
       </div>
       <div class="ref-item">
@@ -394,16 +394,18 @@
 </div>
 
 <script>
-  // ─── データ（後でシートから自動取得） ──────────────────────
-  const B_TODAY       = 99254;    // 今日の原価（B列）
-  const CV_TODAY      = 23;       // 今日の計測CV（E列）
-  const D_OTHER       = 1168196;  // 今日を除いた当月売上合計（D列の他日分）
-  const CV_MONTHLY    = 191;      // 当月CV合計
-  const BUDGET        = 7000000;  // 月間売上予算（仮: 700万）
-  const DEFAULT_RATE  = 45;
-  const TARGET_MIN    = 6000;
-  const TARGET_MAX    = 6700;
+  // ─── Apps Script エンドポイント ──────────────────────────────
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFQjg2kjIzAmNTn1eZ2w5telFmwFlntcaQtL9QMYacjG0aLGjiWdlhnV622769V0uCdQ/exec';
   // ────────────────────────────────────────────────────────────
+
+  let B_TODAY      = 0;
+  let CV_TODAY     = 0;
+  let D_OTHER      = 0;
+  let CV_MONTHLY   = 0;
+  const BUDGET       = 7000000;
+  const DEFAULT_RATE = 45;
+  const TARGET_MIN   = 6000;
+  const TARGET_MAX   = 6700;
 
   let currentRate = DEFAULT_RATE;
 
@@ -417,7 +419,7 @@
   }
 
   // ─── 初期化 ───
-  window.onload = () => {
+  function initUI() {
     const now = new Date();
     document.getElementById('today-label').textContent =
       `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 の入力`;
@@ -425,7 +427,6 @@
     document.getElementById('ref-cv').textContent         = CV_TODAY.toLocaleString() + ' 件';
     document.getElementById('ref-cv-monthly').textContent = CV_MONTHLY.toLocaleString() + ' 件';
 
-    // 時間経過ライン
     const { elapsed, daysInMonth, rate } = getTimeElapsed();
     const pct = Math.min(100, rate * 100);
     document.getElementById('time-line').style.left = pct + '%';
@@ -434,6 +435,33 @@
       `時間経過率: ${Math.round(pct)}%（${elapsed}日/${daysInMonth}日）`;
 
     updateAll(DEFAULT_RATE);
+  }
+
+  window.onload = () => {
+    const now = new Date();
+    document.getElementById('today-label').textContent =
+      `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 の入力`;
+
+    // シートからデータ取得
+    fetch(GAS_URL)
+      .then(r => r.json())
+      .then(data => {
+        B_TODAY    = data.bToday    || 0;
+        CV_TODAY   = data.cvToday   || 0;
+        D_OTHER    = data.dOther    || 0;
+        CV_MONTHLY = data.cvMonthly || 0;
+        document.getElementById('ref-cost').textContent =
+          B_TODAY ? '¥' + B_TODAY.toLocaleString() : '（データなし）';
+        const label = data.latestDate ? `✅ ${data.latestDate} 時点のデータ（スプレッドシートから取得）` : '✅ スプレッドシートから取得';
+        document.getElementById('demo-badge').textContent = label;
+        initUI();
+      })
+      .catch(() => {
+        // 取得失敗時は固定値で動かす
+        B_TODAY = 99254; CV_TODAY = 23; D_OTHER = 1168196; CV_MONTHLY = 191;
+        document.getElementById('demo-badge').textContent = '⚠ シート取得失敗 - 固定値で表示中';
+        initUI();
+      });
   };
 
   // ─── 計算 ───
