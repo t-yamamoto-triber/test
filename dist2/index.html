@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>料率入力｜Web広告レポート</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP',
+                   'メイリオ', Meiryo, sans-serif;
+      background: #0f1117;
+      color: #e8eaf0;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 24px 16px 64px;
+    }
+
+    .card {
+      background: #161b27;
+      border: 1px solid #1e2535;
+      border-radius: 20px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    /* ─── Header ─── */
+    .header { text-align: center; margin-bottom: 20px; }
+    .date-label { font-size: 0.75rem; color: #475569; margin-bottom: 6px; }
+    .header h1 { font-size: 1.2rem; font-weight: 800; color: #e0e7ff; }
+    .demo-badge {
+      display: inline-block; margin-top: 6px;
+      background: #1e2535; border: 1px solid #334155; border-radius: 6px;
+      font-size: 0.62rem; color: #475569; padding: 2px 10px;
+    }
+
+    /* ─── 参考データ ─── */
+    .ref-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px; margin-bottom: 16px;
+    }
+    .ref-item {
+      background: #0f1117; border: 1px solid #1e2535;
+      border-radius: 10px; padding: 10px 12px;
+    }
+    .ref-label {
+      font-size: 0.6rem; font-weight: 700; color: #475569;
+      letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px;
+    }
+    .ref-value { font-size: 0.9rem; font-weight: 800; color: #c7d2fe; }
+
+    /* ─── 料率入力 ─── */
+    .rate-section {
+      background: #0f1117; border: 1px solid #1e2535;
+      border-radius: 14px; padding: 18px; margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 0.68rem; font-weight: 700; color: #475569;
+      letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px;
+    }
+    .rate-input-row {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    }
+    .rate-number-wrap { position: relative; flex-shrink: 0; }
+    input[type=number] {
+      width: 82px;
+      background: #161b27; border: 2px solid #6366f1; border-radius: 10px;
+      color: #a78bfa; font-family: inherit; font-size: 1.3rem; font-weight: 800;
+      text-align: center; padding: 8px 24px 8px 8px; outline: none;
+      -moz-appearance: textfield;
+    }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .pct-label {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      font-size: 0.9rem; font-weight: 700; color: #6366f1;
+    }
+    input[type=range] {
+      -webkit-appearance: none; flex: 1; height: 6px;
+      border-radius: 999px; background: #1e2535; outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      cursor: pointer; border: 2px solid #0f1117;
+    }
+    .slider-marks {
+      display: flex; justify-content: space-between;
+      font-size: 0.6rem; color: #334155;
+    }
+
+    /* ─── 指標グリッド ─── */
+    .metrics-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 16px;
+    }
+    .metric-box {
+      background: #0f1117; border: 1.5px solid #1e2535;
+      border-radius: 12px; padding: 14px 16px;
+      transition: border-color 0.25s;
+    }
+    .metric-label {
+      font-size: 0.62rem; font-weight: 700; color: #475569;
+      letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .metric-val {
+      font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em;
+      color: #e0e7ff; transition: color 0.25s;
+    }
+    .metric-sub {
+      font-size: 0.65rem; color: #334155; margin-top: 3px;
+    }
+    .metric-status {
+      font-size: 0.65rem; font-weight: 600; margin-top: 4px; min-height: 1em;
+    }
+
+    /* ─── 進捗エリア（全幅） ─── */
+    .progress-area {
+      background: #0f1117; border: 1.5px solid #1e2535;
+      border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
+      transition: border-color 0.25s;
+    }
+    .progress-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .progress-title {
+      font-size: 0.65rem; font-weight: 700; color: #475569;
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .progress-pct {
+      font-size: 1.3rem; font-weight: 800; color: #e0e7ff;
+      transition: color 0.25s;
+    }
+
+    .bar-wrap { position: relative; margin-bottom: 8px; }
+    .bar-bg {
+      height: 10px; background: #1e2535; border-radius: 999px; overflow: visible;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #6366f1, #8b5cf6);
+      transition: width 0.2s;
+      position: relative;
+    }
+    /* 時間経過ライン */
+    .time-line {
+      position: absolute; top: -4px; height: 18px; width: 2px;
+      background: #fbbf24; border-radius: 1px;
+    }
+    .time-label {
+      position: absolute; top: -18px;
+      font-size: 0.6rem; color: #fbbf24;
+      transform: translateX(-50%); white-space: nowrap;
+    }
+
+    .progress-detail {
+      display: flex; justify-content: space-between;
+      font-size: 0.65rem; color: #334155; margin-top: 6px;
+    }
+    .progress-detail .highlight { color: #64748b; }
+
+    /* ─── 色クラス ─── */
+    .c-purple { color: #a78bfa !important; }
+    .c-blue   { color: #38bdf8 !important; }
+    .c-green  { color: #4ade80 !important; }
+    .c-yellow { color: #fbbf24 !important; }
+    .c-orange { color: #fb923c !important; }
+    .c-red    { color: #f87171 !important; }
+
+    .b-green  { border-color: #16a34a !important; }
+    .b-yellow { border-color: #d97706 !important; }
+    .b-red    { border-color: #dc2626 !important; }
+
+    /* ─── 残日数シミュレーション ─── */
+    .sim-area {
+      background: #0f1117; border: 1.5px solid #1e2535;
+      border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
+      transition: border-color 0.25s;
+    }
+    .sim-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .sim-title {
+      font-size: 0.65rem; font-weight: 700; color: #475569;
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .sim-days {
+      font-size: 0.75rem; font-weight: 700; color: #64748b;
+    }
+    .sim-status {
+      font-size: 0.78rem; font-weight: 700; margin-bottom: 10px; min-height: 1.2em;
+    }
+    .sim-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 6px 0; border-bottom: 1px solid #1e2535;
+    }
+    .sim-row:last-child { border-bottom: none; }
+    .sim-row-label {
+      font-size: 0.68rem; color: #475569;
+    }
+    .sim-row-val {
+      font-size: 1.05rem; font-weight: 800; color: #e0e7ff;
+    }
+    .sim-row-sub {
+      font-size: 0.6rem; color: #334155; margin-top: 1px; text-align: right;
+    }
+    .sim-col { display: flex; flex-direction: column; align-items: flex-end; }
+
+    /* ─── ボタン ─── */
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn {
+      padding: 14px 10px; border-radius: 12px; border: none;
+      font-family: inherit; font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; transition: transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-confirm { background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; }
+    .btn-reset { background: #1e2535; color: #94a3b8; border: 1px solid #2d3a50; }
+
+    /* ─── 完了画面 ─── */
+    .done-screen { display: none; text-align: center; }
+    .done-screen.visible { display: block; }
+    .done-icon { font-size: 3rem; margin-bottom: 12px; }
+    .done-title { font-size: 1.2rem; font-weight: 800; color: #4ade80; margin-bottom: 12px; }
+    .done-detail {
+      background: #0f1117; border: 1px solid #1e2535;
+      border-radius: 12px; padding: 16px; margin: 0 0 16px; text-align: left;
+    }
+    .done-row {
+      display: flex; justify-content: space-between;
+      font-size: 0.82rem; color: #64748b; padding: 5px 0;
+      border-bottom: 1px solid #1e2535;
+    }
+    .done-row:last-child { border-bottom: none; }
+    .done-row span:last-child { color: #e0e7ff; font-weight: 700; }
+    .done-note { font-size: 0.75rem; color: #475569; margin-bottom: 12px; }
+    .btn-redo { background: #1e2535; color: #94a3b8; border: 1px solid #2d3a50; width: 100%; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- ─── メイン画面 ─── -->
+  <div id="main-screen">
+
+    <div class="header">
+      <div class="date-label" id="today-label">読み込み中...</div>
+      <h1>料率（C列）入力</h1>
+      <div class="demo-badge">⚠ 参考データは固定値（後でシートから自動取得）</div>
+    </div>
+
+    <!-- 参考データ -->
+    <div class="ref-grid">
+      <div class="ref-item">
+        <div class="ref-label">原価 B列（今日）</div>
+        <div class="ref-value" id="ref-cost">—</div>
+      </div>
+      <div class="ref-item">
+        <div class="ref-label">計測CV E列（今日）</div>
+        <div class="ref-value" id="ref-cv">—</div>
+      </div>
+      <div class="ref-item">
+        <div class="ref-label">月間CV合計</div>
+        <div class="ref-value" id="ref-cv-monthly">—</div>
+      </div>
+    </div>
+
+    <!-- 料率入力 -->
+    <div class="rate-section">
+      <div class="section-title">料率を選択（C列に入力する値）</div>
+      <div class="rate-input-row">
+        <div class="rate-number-wrap">
+          <input type="number" id="rate-number" min="0" max="60" value="45"
+                 oninput="onNumberInput(this.value)" />
+          <span class="pct-label">%</span>
+        </div>
+        <input type="range" id="rate-slider" min="0" max="60" value="45" step="1"
+               oninput="onSliderInput(this.value)" />
+      </div>
+      <div class="slider-marks">
+        <span>0%</span><span>10%</span><span>20%</span>
+        <span>30%</span><span>40%</span><span>50%</span><span>60%</span>
+      </div>
+    </div>
+
+    <!-- 指標グリッド -->
+    <div class="metrics-grid">
+
+      <!-- 今日の広告費（D列） -->
+      <div class="metric-box" id="box-d-today">
+        <div class="metric-label">今日の広告費（D列）</div>
+        <div class="metric-val c-blue" id="val-d-today">¥—</div>
+        <div class="metric-sub">B ÷ (1 − 料率)</div>
+      </div>
+
+      <!-- 当月合計広告費（D10） -->
+      <div class="metric-box" id="box-d-monthly">
+        <div class="metric-label">当月合計広告費（D10）</div>
+        <div class="metric-val c-purple" id="val-d-monthly">¥—</div>
+        <div class="metric-sub">月間売上累計</div>
+      </div>
+
+      <!-- 今日のCPA -->
+      <div class="metric-box" id="box-cpa-today">
+        <div class="metric-label">今日の CPA（G列）</div>
+        <div class="metric-val" id="val-cpa-today">¥—</div>
+        <div class="metric-status" id="st-cpa-today"></div>
+      </div>
+
+      <!-- 当月CPA（G10） -->
+      <div class="metric-box" id="box-cpa-monthly">
+        <div class="metric-label">当月 CPA（G10）</div>
+        <div class="metric-val" id="val-cpa-monthly">¥—</div>
+        <div class="metric-status" id="st-cpa-monthly"></div>
+      </div>
+
+    </div>
+
+    <!-- 消化進捗率（全幅） -->
+    <div class="progress-area" id="box-progress">
+      <div class="progress-header">
+        <div class="progress-title">当月消化進捗率（D10 ÷ 月間予算）</div>
+        <div class="progress-pct" id="val-progress">—%</div>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar-bg">
+          <div class="bar-fill" id="bar-fill" style="width:0%"></div>
+          <div class="time-line" id="time-line">
+            <div class="time-label" id="time-label">時間経過</div>
+          </div>
+        </div>
+      </div>
+      <div class="progress-detail">
+        <span id="detail-d10">D10: —</span>
+        <span class="highlight" id="detail-time">時間経過率: —%（—日/30日）</span>
+        <span id="detail-budget">予算: ¥7,000,000</span>
+      </div>
+    </div>
+
+    <!-- 残日数シミュレーション -->
+    <div class="sim-area" id="sim-area">
+      <div class="sim-header">
+        <div class="sim-title">残日数シミュレーション</div>
+        <div class="sim-days" id="sim-days">残り — 日（明日〜月末）</div>
+      </div>
+      <div class="sim-status" id="sim-status"></div>
+      <div class="sim-row">
+        <div class="sim-row-label">推奨 原価（B列）/日</div>
+        <div class="sim-col">
+          <div class="sim-row-val" id="sim-b">¥—</div>
+          <div class="sim-row-sub" id="sim-b-sub"></div>
+        </div>
+      </div>
+      <div class="sim-row">
+        <div class="sim-row-label">推奨 広告費（D列）/日</div>
+        <div class="sim-col">
+          <div class="sim-row-val" id="sim-d">¥—</div>
+          <div class="sim-row-sub" id="sim-d-sub"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ボタン -->
+    <div class="btn-row">
+      <button class="btn btn-confirm" onclick="confirmRate()">✅ この料率で確定</button>
+      <button class="btn btn-reset"   onclick="resetToDefault()">↩️ 45%に戻す</button>
+    </div>
+
+  </div>
+
+  <!-- ─── 完了画面 ─── -->
+  <div class="done-screen" id="done-screen">
+    <div class="done-icon">✅</div>
+    <div class="done-title" id="done-title"></div>
+    <div class="done-detail">
+      <div class="done-row"><span>確定した料率</span><span id="done-rate"></span></div>
+      <div class="done-row"><span>今日の広告費（D列）</span><span id="done-d-today"></span></div>
+      <div class="done-row"><span>当月合計広告費（D10）</span><span id="done-d-monthly"></span></div>
+      <div class="done-row"><span>今日の CPA（G列）</span><span id="done-cpa-today"></span></div>
+      <div class="done-row"><span>当月 CPA（G10）</span><span id="done-cpa-monthly"></span></div>
+      <div class="done-row"><span>当月消化進捗率</span><span id="done-progress"></span></div>
+    </div>
+    <div class="done-note">スプレッドシートの C列に上記の料率を入力してください</div>
+    <button class="btn btn-redo" onclick="redoInput()">↩️ やり直す</button>
+  </div>
+
+</div>
+
+<script>
+  // ─── データ（後でシートから自動取得） ──────────────────────
+  const B_TODAY       = 99254;    // 今日の原価（B列）
+  const CV_TODAY      = 23;       // 今日の計測CV（E列）
+  const D_OTHER       = 1168196;  // 今日を除いた当月売上合計（D列の他日分）
+  const CV_MONTHLY    = 191;      // 当月CV合計
+  const BUDGET        = 7000000;  // 月間売上予算（仮: 700万）
+  const DEFAULT_RATE  = 45;
+  const TARGET_MIN    = 6000;
+  const TARGET_MAX    = 6700;
+  // ────────────────────────────────────────────────────────────
+
+  let currentRate = DEFAULT_RATE;
+
+  // 時間経過率を計算（今日は何日目か）
+  function getTimeElapsed() {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const elapsed = now.getDate() - 1; // 昨日まで
+    return { elapsed, daysInMonth, rate: elapsed / daysInMonth };
+  }
+
+  // ─── 初期化 ───
+  window.onload = () => {
+    const now = new Date();
+    document.getElementById('today-label').textContent =
+      `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 の入力`;
+    document.getElementById('ref-cost').textContent       = '¥' + B_TODAY.toLocaleString();
+    document.getElementById('ref-cv').textContent         = CV_TODAY.toLocaleString() + ' 件';
+    document.getElementById('ref-cv-monthly').textContent = CV_MONTHLY.toLocaleString() + ' 件';
+
+    // 時間経過ライン
+    const { elapsed, daysInMonth, rate } = getTimeElapsed();
+    const pct = Math.min(100, rate * 100);
+    document.getElementById('time-line').style.left = pct + '%';
+    document.getElementById('time-label').textContent = `経過 ${Math.round(pct)}%`;
+    document.getElementById('detail-time').textContent =
+      `時間経過率: ${Math.round(pct)}%（${elapsed}日/${daysInMonth}日）`;
+
+    updateAll(DEFAULT_RATE);
+  };
+
+  // ─── 計算 ───
+  function calcDToday(rate) {
+    if (rate >= 100) return null;
+    return B_TODAY / (1 - rate / 100);
+  }
+  function calcDMonthly(rate) {
+    const d = calcDToday(rate);
+    return d !== null ? D_OTHER + d : null;
+  }
+  function calcCPAToday(rate) {
+    const d = calcDToday(rate);
+    return (d !== null && CV_TODAY > 0) ? Math.floor(d / CV_TODAY) : null;
+  }
+  function calcCPAMonthly(rate) {
+    const d = calcDMonthly(rate);
+    return (d !== null && CV_MONTHLY > 0) ? Math.floor(d / CV_MONTHLY) : null;
+  }
+  function calcProgress(rate) {
+    const d = calcDMonthly(rate);
+    return d !== null ? d / BUDGET : null;
+  }
+
+  // ─── 色判定 ───
+  function cpaClass(cpa) {
+    if (cpa === null) return '';
+    if (cpa >= TARGET_MIN && cpa <= TARGET_MAX) return 'good';
+    return cpa < TARGET_MIN ? 'warn' : 'over';
+  }
+  function cpaColor(cls) {
+    return { good: 'c-green', warn: 'c-yellow', over: 'c-red', '': '' }[cls];
+  }
+  function cpaBorder(cls) {
+    return { good: 'b-green', warn: 'b-yellow', over: 'b-red', '': '' }[cls];
+  }
+  function cpaStatusText(cpa, cls) {
+    if (!cls) return '';
+    if (cls === 'good') return '✅ 目標範囲内';
+    if (cls === 'warn') return '⚠️ 目標より低い';
+    return '❌ 目標より高い';
+  }
+
+  function setBox(boxId, valId, stId, cpa) {
+    const cls = cpaClass(cpa);
+    document.getElementById(boxId).className =
+      'metric-box' + (cls ? ' ' + cpaBorder(cls) : '');
+    const v = document.getElementById(valId);
+    v.textContent = cpa !== null ? '¥' + Math.round(cpa).toLocaleString() : '¥—';
+    v.className = 'metric-val' + (cls ? ' ' + cpaColor(cls) : '');
+    if (stId) {
+      const s = document.getElementById(stId);
+      s.textContent = cpaStatusText(cpa, cls);
+      s.className = 'metric-status' + (cls ? ' ' + cpaColor(cls) : '');
+    }
+  }
+
+  // ─── 全体更新 ───
+  function updateAll(rate) {
+    currentRate = rate;
+
+    const dToday   = calcDToday(rate);
+    const dMonthly = calcDMonthly(rate);
+    const cToday   = calcCPAToday(rate);
+    const cMonth   = calcCPAMonthly(rate);
+    const prog     = calcProgress(rate);
+
+    // 今日のD
+    document.getElementById('val-d-today').textContent =
+      dToday !== null ? '¥' + Math.round(dToday).toLocaleString() : '¥—';
+
+    // 当月D10
+    document.getElementById('val-d-monthly').textContent =
+      dMonthly !== null ? '¥' + Math.round(dMonthly).toLocaleString() : '¥—';
+
+    // CPA
+    setBox('box-cpa-today',   'val-cpa-today',   'st-cpa-today',   cToday);
+    setBox('box-cpa-monthly', 'val-cpa-monthly', 'st-cpa-monthly', cMonth);
+
+    // 進捗率
+    if (prog !== null) {
+      const pPct = prog * 100;
+      const { rate: timeRate } = getTimeElapsed();
+
+      document.getElementById('val-progress').textContent = pPct.toFixed(1) + '%';
+      document.getElementById('bar-fill').style.width = Math.min(100, pPct) + '%';
+      document.getElementById('detail-d10').textContent =
+        'D10: ¥' + Math.round(dMonthly).toLocaleString();
+
+      // 進捗率の色
+      const diff = pPct / 100 - timeRate;
+      let progColor = 'c-green';
+      if (diff < -0.10) progColor = 'c-yellow';
+      else if (diff > 0.10) progColor = 'c-orange';
+      document.getElementById('val-progress').className = 'progress-pct ' + progColor;
+
+      const barEl = document.getElementById('bar-fill');
+      barEl.style.background =
+        diff < -0.10 ? 'linear-gradient(90deg, #d97706, #b45309)' :
+        diff > 0.10  ? 'linear-gradient(90deg, #ea580c, #dc2626)' :
+                       'linear-gradient(90deg, #6366f1, #8b5cf6)';
+    }
+
+    updateSim(rate);
+  }
+
+  // ─── 残日数・推奨原価 ───
+  function getRemaining() {
+    const now = new Date();
+    const today = now.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const remaining = daysInMonth - today; // 明日〜月末
+    return { remaining, today, daysInMonth };
+  }
+
+  function calcRecommendation(rate) {
+    const dMonthly = calcDMonthly(rate);
+    if (dMonthly === null) return null;
+    const { remaining } = getRemaining();
+    if (remaining <= 0) return { remaining: 0, requiredB: null, requiredD: null };
+    const remainingBudget = BUDGET - dMonthly;
+    const requiredD = remainingBudget / remaining;
+    const requiredB = requiredD * (1 - rate / 100);
+    return { remaining, requiredB, requiredD, remainingBudget };
+  }
+
+  function updateSim(rate) {
+    const rec = calcRecommendation(rate);
+    const { rate: timeRate } = getTimeElapsed();
+    const prog = calcProgress(rate);
+
+    if (!rec || prog === null) return;
+
+    const { remaining, requiredB, requiredD } = rec;
+    document.getElementById('sim-days').textContent =
+      `残り ${remaining} 日（明日〜月末）`;
+
+    const progPct  = prog * 100;
+    const timePct  = timeRate * 100;
+    const diff     = progPct - timePct;
+    const statusEl = document.getElementById('sim-status');
+    const areaEl   = document.getElementById('sim-area');
+
+    if (remaining === 0) {
+      statusEl.textContent = '本日が月末日のため計算できません';
+      statusEl.className = 'sim-status c-yellow';
+      areaEl.style.borderColor = '';
+      return;
+    }
+
+    if (Math.abs(diff) <= 3) {
+      statusEl.textContent = '✅ ペースは正常です（消化率 ≒ 時間経過率）';
+      statusEl.className = 'sim-status c-green';
+      areaEl.style.borderColor = '#16a34a';
+    } else if (diff < 0) {
+      statusEl.textContent = `⚠️ 進捗が遅れています（消化率 ${progPct.toFixed(1)}% ／ 時間経過率 ${timePct.toFixed(1)}%）`;
+      statusEl.className = 'sim-status c-yellow';
+      areaEl.style.borderColor = '#d97706';
+    } else {
+      statusEl.textContent = `🔴 進捗が超過しています（消化率 ${progPct.toFixed(1)}% ／ 時間経過率 ${timePct.toFixed(1)}%）`;
+      statusEl.className = 'sim-status c-red';
+      areaEl.style.borderColor = '#dc2626';
+    }
+
+    const fmtB = requiredB !== null ? '¥' + Math.round(requiredB).toLocaleString() : '—';
+    const fmtD = requiredD !== null ? '¥' + Math.round(requiredD).toLocaleString() : '—';
+    document.getElementById('sim-b').textContent = fmtB;
+    document.getElementById('sim-d').textContent = fmtD;
+
+    const subLabel = diff < -3 ? '（ペースを上げる目安）'
+                   : diff >  3 ? '（ペースを落とす目安）'
+                   : '（現状ペース維持）';
+    document.getElementById('sim-b-sub').textContent = subLabel;
+    document.getElementById('sim-d-sub').textContent = subLabel;
+  }
+
+  // ─── 入力ハンドラ ───
+  function onSliderInput(val) {
+    const v = Math.min(60, Math.max(0, Number(val)));
+    document.getElementById('rate-number').value = v;
+    updateAll(v);
+  }
+  function onNumberInput(val) {
+    let v = Number(val);
+    if (isNaN(v)) return;
+    v = Math.min(60, Math.max(0, v));
+    document.getElementById('rate-slider').value = v;
+    updateAll(v);
+  }
+  function resetToDefault() {
+    document.getElementById('rate-slider').value = DEFAULT_RATE;
+    document.getElementById('rate-number').value = DEFAULT_RATE;
+    updateAll(DEFAULT_RATE);
+  }
+
+  // ─── 確定 ───
+  function confirmRate() {
+    const dToday   = calcDToday(currentRate);
+    const dMonthly = calcDMonthly(currentRate);
+    const cToday   = calcCPAToday(currentRate);
+    const cMonth   = calcCPAMonthly(currentRate);
+    const prog     = calcProgress(currentRate);
+
+    document.getElementById('main-screen').style.display = 'none';
+    document.getElementById('done-screen').classList.add('visible');
+    document.getElementById('done-title').textContent = `料率 ${currentRate}% で確定`;
+
+    const fmt = (v) => v !== null ? '¥' + Math.round(v).toLocaleString() : '—';
+    document.getElementById('done-rate').textContent        = currentRate + '%';
+    document.getElementById('done-d-today').textContent     = fmt(dToday);
+    document.getElementById('done-d-monthly').textContent   = fmt(dMonthly);
+    document.getElementById('done-cpa-today').textContent   = fmt(cToday);
+    document.getElementById('done-cpa-monthly').textContent = fmt(cMonth);
+    document.getElementById('done-progress').textContent    =
+      prog !== null ? (prog * 100).toFixed(1) + '%' : '—';
+  }
+
+  function redoInput() {
+    document.getElementById('done-screen').classList.remove('visible');
+    document.getElementById('main-screen').style.display = 'block';
+  }
+</script>
+</body>
+</html>
