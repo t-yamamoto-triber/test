@@ -389,7 +389,7 @@
       <div class="done-row"><span>当月 CPA（G10）</span><span id="done-cpa-monthly"></span></div>
       <div class="done-row"><span>当月消化進捗率</span><span id="done-progress"></span></div>
     </div>
-    <div class="done-note">スプレッドシートの C列に上記の料率を入力してください</div>
+    <div class="done-note" id="done-note">スプレッドシートの C列に上記の料率を入力してください</div>
     <button class="btn btn-redo" onclick="redoInput()">↩️ やり直す</button>
   </div>
 
@@ -397,7 +397,7 @@
 
 <script>
   // ─── Apps Script エンドポイント ──────────────────────────────
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFQjg2kjIzAmNTn1eZ2w5telFmwFlntcaQtL9QMYacjG0aLGjiWdlhnV622769V0uCdQ/exec';
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzchPqzR2Amo8Tukm-w8ZuutF0D_LEdxJGjs2zcXgRoXjeKjlVP_-dc6EogckNPqvS5bQ/exec';
   // ────────────────────────────────────────────────────────────
 
   let B_TODAY      = 0;
@@ -684,6 +684,7 @@
     const cMonth   = calcCPAMonthly(currentRate);
     const prog     = calcProgress(currentRate);
 
+    // 画面切り替え
     document.getElementById('main-screen').style.display = 'none';
     document.getElementById('done-screen').classList.add('visible');
     document.getElementById('done-title').textContent = `料率 ${currentRate}% で確定`;
@@ -696,6 +697,25 @@
     document.getElementById('done-cpa-monthly').textContent = fmt(cMonth);
     document.getElementById('done-progress').textContent    =
       prog !== null ? (prog * 100).toFixed(1) + '%' : '—';
+
+    // スプレッドシートのC列に書き込む
+    const noteEl = document.getElementById('done-note');
+    noteEl.textContent = 'スプレッドシートに書き込み中...';
+    fetch(GAS_URL + '?rate=' + currentRate)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          noteEl.textContent = `✅ C列（${data.row - 1}行目）に ${data.rate}% を書き込みました`;
+          noteEl.style.color = '#4ade80';
+        } else {
+          noteEl.textContent = `⚠ 書き込み失敗: ${data.error}。手動でC列に入力してください。`;
+          noteEl.style.color = '#fb923c';
+        }
+      })
+      .catch(() => {
+        noteEl.textContent = '⚠ 通信エラー。手動でC列に入力してください。';
+        noteEl.style.color = '#fb923c';
+      });
   }
 
   function redoInput() {
