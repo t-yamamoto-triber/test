@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web広告レポート</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP',
+                   'メイリオ', Meiryo, sans-serif;
+      background: #0f1117;
+      color: #e8eaf0;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    /* ─── Header ─── */
+    .header { margin-bottom: 36px; }
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+    .header h1 { font-size: clamp(1.2rem, 3vw, 1.7rem); font-weight: 800; color: #e0e7ff; }
+    .header-meta { font-size: 0.78rem; color: #475569; }
+    .header-sub  { font-size: 0.82rem; color: #475569; }
+
+    /* ─── Judge banner ─── */
+    .judge-banner {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 24px;
+      border-radius: 14px;
+      margin-bottom: 28px;
+    }
+    .judge-banner.ng-short { background: linear-gradient(135deg,#1f180d,#2a1f0e); border: 1.5px solid #d97706; }
+    .judge-banner.ok       { background: linear-gradient(135deg,#0d1f17,#0e2318); border: 1.5px solid #16a34a; }
+    .judge-icon-big { font-size: 2.4rem; flex-shrink: 0; }
+    .judge-text h2  { font-size: 1.1rem; font-weight: 800; margin-bottom: 2px; }
+    .judge-text p   { font-size: 0.82rem; color: #94a3b8; }
+    .ng-short .judge-text h2 { color: #fbbf24; }
+    .ok       .judge-text h2 { color: #4ade80; }
+
+    /* ─── KPI Grid ─── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .kpi-card { background: #161b27; border: 1px solid #1e2535; border-radius: 14px; padding: 20px 22px; }
+    .kpi-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #475569; margin-bottom: 10px; }
+    .kpi-value { font-size: 1.65rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; margin-bottom: 4px; }
+    .kpi-unit  { font-size: 0.95rem; font-weight: 600; }
+    .kpi-sub   { font-size: 0.75rem; color: #475569; margin-top: 4px; }
+    .c-purple { color: #a78bfa; }
+    .c-blue   { color: #38bdf8; }
+    .c-orange { color: #fb923c; }
+    .c-red    { color: #f87171; }
+    .c-green  { color: #4ade80; }
+    .c-yellow { color: #fbbf24; }
+
+    /* ─── Progress section ─── */
+    .progress-card { background: #161b27; border: 1px solid #1e2535; border-radius: 14px; padding: 24px 26px; margin-bottom: 24px; }
+    .progress-title { font-size: 0.78rem; font-weight: 700; color: #475569; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 20px; }
+
+    .bar-compare-wrap { position: relative; margin-top: 4px; }
+    .bar-outer { background: #0f1117; border-radius: 999px; height: 14px; overflow: visible; position: relative; }
+    .bar-progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#6366f1,#8b5cf6); position: relative; }
+    .bar-time-line { position: absolute; top: -4px; height: 22px; width: 2px; background: #fbbf24; border-radius: 1px; }
+    .bar-time-label { position: absolute; top: -22px; font-size: 0.68rem; color: #fbbf24; transform: translateX(-50%); white-space: nowrap; }
+    .bar-progress-label { position: absolute; bottom: -20px; font-size: 0.68rem; color: #a78bfa; transform: translateX(-50%); white-space: nowrap; }
+
+    .diff-row { display: flex; align-items: center; gap: 10px; margin-top: 32px; padding: 12px 16px; background: #1f180d; border: 1px solid #d97706; border-radius: 10px; }
+    .diff-row.ok-diff { background: #0d1f17; border-color: #16a34a; }
+    .diff-icon { font-size: 1.2rem; flex-shrink: 0; }
+    .diff-text { font-size: 0.82rem; color: #94a3b8; }
+    .diff-text strong { color: #fbbf24; }
+    .diff-text.ok-text strong { color: #4ade80; }
+
+    /* ─── stat rows inside progress ─── */
+    .stat-grid { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+    .stat-box { flex: 1; min-width: 160px; background: #0f1117; border: 1px solid #1e2535; border-radius: 10px; padding: 14px 18px; }
+    .stat-box.warn { border-color: #334155; }
+    .stat-label { font-size: 0.7rem; color: #475569; margin-bottom: 6px; }
+    .stat-value { font-size: 1.4rem; font-weight: 800; }
+    .stat-sub   { font-size: 0.72rem; color: #475569; margin-top: 2px; }
+
+    /* ─── Daily table ─── */
+    .table-card { background: #161b27; border: 1px solid #1e2535; border-radius: 14px; padding: 24px; margin-bottom: 24px; overflow-x: auto; }
+    .table-title { font-size: 0.78rem; font-weight: 700; color: #475569; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th { color: #475569; font-weight: 600; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 8px 12px; text-align: right; border-bottom: 1px solid #1e2535; }
+    th:first-child { text-align: left; }
+    td { padding: 9px 12px; text-align: right; color: #94a3b8; border-bottom: 1px solid #0f1117; }
+    td:first-child { text-align: left; color: #c7d2fe; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1a2035; }
+    .td-total { color: #e0e7ff; font-weight: 700; }
+
+    /* ─── Footer ─── */
+    .footer { text-align: center; padding-top: 32px; font-size: 0.72rem; color: #1e2535; }
+
+    /* ─── Loading ─── */
+    .loading-overlay {
+      position: fixed; inset: 0; background: #0f1117;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; color: #475569; z-index: 100;
+    }
+
+    @media (max-width: 600px) { .kpi-grid { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">📊 データ読み込み中...</div>
+
+<div class="page" id="page" style="display:none;">
+
+  <!-- ─── Header ─── -->
+  <header class="header">
+    <div class="header-top">
+      <h1>📊 Web広告レポート</h1>
+      <div class="header-meta" id="header-meta">集計中...</div>
+    </div>
+    <div class="header-sub" id="header-sub"></div>
+  </header>
+
+  <!-- ─── 判定バナー ─── -->
+  <div class="judge-banner" id="judge-banner">
+    <div class="judge-icon-big" id="judge-icon"></div>
+    <div class="judge-text">
+      <h2 id="judge-title"></h2>
+      <p id="judge-desc"></p>
+    </div>
+  </div>
+
+  <!-- ─── KPI Cards ─── -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">今月の広告費（原価）</div>
+      <div class="kpi-value c-purple">¥<span id="kpi-cost"></span></div>
+      <div class="kpi-sub" id="kpi-cost-sub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">今月の広告費（売上）</div>
+      <div class="kpi-value c-blue">¥<span id="kpi-sales"></span></div>
+      <div class="kpi-sub" id="kpi-sales-sub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">月間売上予算</div>
+      <div class="kpi-value c-orange">¥<span id="kpi-budget"></span></div>
+      <div class="kpi-sub">今月の目標</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">残予算（売上）</div>
+      <div class="kpi-value c-yellow">¥<span id="kpi-remaining"></span></div>
+      <div class="kpi-sub">予算 − 売上累計</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">計測CV数（累計）</div>
+      <div class="kpi-value c-green"><span id="kpi-cv"></span><span class="kpi-unit"> 件</span></div>
+      <div class="kpi-sub" id="kpi-cv-sub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">計測CPA（月平均）</div>
+      <div class="kpi-value c-red">¥<span id="kpi-cpa"></span></div>
+      <div class="kpi-sub">売上累計 ÷ CV累計</div>
+    </div>
+  </div>
+
+  <!-- ─── Progress ─── -->
+  <div class="progress-card">
+    <div class="progress-title">進捗率 vs 時間経過率</div>
+
+    <div style="margin-bottom: 8px;">
+      <div style="font-size:0.75rem; color:#64748b; margin-bottom:18px;" id="progress-desc"></div>
+
+      <div class="bar-compare-wrap" style="margin-bottom: 48px;">
+        <div style="position:relative; margin-top: 24px;">
+          <div class="bar-time-label" id="bar-time-label"></div>
+          <div class="bar-outer">
+            <div class="bar-progress-fill" id="bar-progress-fill"></div>
+            <div class="bar-time-line" id="bar-time-line"></div>
+          </div>
+          <div class="bar-progress-label" id="bar-progress-label"></div>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-label">進捗率</div>
+          <div class="stat-value" style="color:#8b5cf6;" id="stat-progress"></div>
+          <div class="stat-sub" id="stat-progress-sub"></div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">時間経過率</div>
+          <div class="stat-value" style="color:#fbbf24;" id="stat-time"></div>
+          <div class="stat-sub" id="stat-time-sub"></div>
+        </div>
+        <div class="stat-box warn">
+          <div class="stat-label">しきい値</div>
+          <div class="stat-value" style="color:#64748b;">±10%</div>
+          <div class="stat-sub">この範囲内なら ⭕</div>
+        </div>
+      </div>
+
+      <div class="diff-row" id="diff-row">
+        <div class="diff-icon" id="diff-icon"></div>
+        <div class="diff-text" id="diff-text"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Daily Table ─── -->
+  <div class="table-card">
+    <div class="table-title" id="table-title">日別データ</div>
+    <table>
+      <thead>
+        <tr>
+          <th>日付</th>
+          <th>原価</th>
+          <th>料率</th>
+          <th>売上</th>
+          <th>計測CV</th>
+          <th>計測CPA</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+  <footer class="footer" id="footer"></footer>
+
+</div>
+
+<script>
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzchPqzR2Amo8Tukm-w8ZuutF0D_LEdxJGjs2zcXgRoXjeKjlVP_-dc6EogckNPqvS5bQ/exec';
+  const BUDGET  = 7_000_000;
+
+  const fmt  = n => Math.round(n).toLocaleString('ja-JP');
+  const pct  = n => (n * 100).toFixed(1) + '%';
+
+  function daysInMonth(year, month) {
+    return new Date(year, month + 1, 0).getDate();
+  }
+
+  function render(data) {
+    const now      = new Date();
+    const year     = now.getFullYear();
+    const month    = now.getMonth();
+    const today    = now.getDate();
+    const totalDays = daysInMonth(year, month);
+    const timeRate  = today / totalDays;
+
+    const rows    = data.rows || [];
+    const bTotal  = rows.reduce((s, r) => s + r.b, 0);
+    const dTotal  = data.dOther || 0;
+    const cvTotal = data.cvMonthly || 0;
+    const remaining = BUDGET - dTotal;
+    const avgCPA  = cvTotal > 0 ? dTotal / cvTotal : 0;
+    const progressRate = BUDGET > 0 ? dTotal / BUDGET : 0;
+    const diff    = progressRate - timeRate;
+    const isOk    = Math.abs(diff) <= 0.10;
+    const isOver  = diff > 0.10;
+    const latestDate = data.latestDate || '—';
+
+    const monthStr = `${year}年${month + 1}月`;
+    const periodStr = `${year}/${String(month+1).padStart(2,'0')}/01 〜 ${latestDate}`;
+
+    // Header
+    document.getElementById('header-meta').textContent =
+      `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 自動集計`;
+    document.getElementById('header-sub').textContent =
+      `対象: スマートニュース ／ 集計期間: ${periodStr}`;
+
+    // Judge banner
+    const banner = document.getElementById('judge-banner');
+    const icon   = document.getElementById('judge-icon');
+    const title  = document.getElementById('judge-title');
+    const desc   = document.getElementById('judge-desc');
+    if (isOk) {
+      banner.className = 'judge-banner ok';
+      icon.textContent = '✅';
+      title.textContent = 'ペース良好';
+      desc.textContent  = `進捗率（${pct(progressRate)}）と時間経過率（${pct(timeRate)}）の差が ±10% 以内に収まっています。`;
+    } else if (isOver) {
+      banner.className = 'judge-banner ok';
+      icon.textContent = '🚀';
+      title.textContent = 'ペース超過';
+      desc.textContent  = `進捗率（${pct(progressRate)}）が時間経過率（${pct(timeRate)}）を ${pct(diff)} 上回っています。`;
+    } else {
+      banner.className = 'judge-banner ng-short';
+      icon.textContent = '❌';
+      title.textContent = 'ペース不足';
+      desc.textContent  = `進捗率（${pct(progressRate)}）が時間経過率（${pct(timeRate)}）を ${pct(Math.abs(diff))} 下回っています。このペースが続くと月末に予算を消化しきれない可能性があります。`;
+    }
+
+    // KPI
+    document.getElementById('kpi-cost').textContent      = fmt(bTotal);
+    document.getElementById('kpi-cost-sub').textContent  = `B列合計（${periodStr}）`;
+    document.getElementById('kpi-sales').textContent     = fmt(dTotal);
+    document.getElementById('kpi-sales-sub').textContent = `D列合計（${periodStr}）`;
+    document.getElementById('kpi-budget').textContent    = fmt(BUDGET);
+    document.getElementById('kpi-remaining').textContent = fmt(remaining);
+    document.getElementById('kpi-cv').textContent        = fmt(cvTotal);
+    document.getElementById('kpi-cv-sub').textContent    = `E列合計（${periodStr}）`;
+    document.getElementById('kpi-cpa').textContent       = fmt(avgCPA);
+
+    // Progress bar
+    const progPct = Math.min(progressRate * 100, 100).toFixed(1);
+    const timePct = Math.min(timeRate * 100, 100).toFixed(1);
+    document.getElementById('progress-desc').textContent =
+      `月初から昨日（${latestDate}）までの売上達成率と、時間の経過割合を比較`;
+    document.getElementById('bar-progress-fill').style.width = progPct + '%';
+    document.getElementById('bar-time-line').style.left      = timePct + '%';
+    document.getElementById('bar-time-label').style.left     = timePct + '%';
+    document.getElementById('bar-time-label').textContent    = `時間経過 ${timePct}%`;
+    document.getElementById('bar-progress-label').style.left = progPct + '%';
+    document.getElementById('bar-progress-label').textContent = `進捗 ${progPct}%`;
+
+    document.getElementById('stat-progress').textContent     = pct(progressRate);
+    document.getElementById('stat-progress-sub').textContent = `¥${fmt(dTotal)} ÷ ¥${fmt(BUDGET)}`;
+    document.getElementById('stat-time').textContent         = pct(timeRate);
+    document.getElementById('stat-time-sub').textContent     = `${today}日 ÷ ${totalDays}日（${month+1}月）`;
+
+    const diffRow  = document.getElementById('diff-row');
+    const diffIcon = document.getElementById('diff-icon');
+    const diffText = document.getElementById('diff-text');
+    const diffAbs  = pct(Math.abs(diff));
+    if (isOk) {
+      diffRow.className = 'diff-row ok-diff';
+      diffIcon.textContent = '✅';
+      diffText.innerHTML = `差分 <strong>+${diffAbs}</strong>（しきい値 ±10% 以内です）`;
+      diffText.className = 'diff-text ok-text';
+    } else {
+      diffRow.className = 'diff-row';
+      diffIcon.textContent = diff > 0 ? '🚀' : '⚠️';
+      diffText.innerHTML = diff > 0
+        ? `差分 <strong>+${diffAbs}</strong>（進捗率が時間経過率を ${diffAbs} 上回っています）`
+        : `差分 <strong>−${diffAbs}</strong>（進捗率が時間経過率を ${diffAbs} 下回っており、しきい値 ±10% を超過しています）`;
+      diffText.className = 'diff-text';
+    }
+
+    // Table
+    document.getElementById('table-title').textContent = `日別データ（${month+1}月）`;
+    const tbody = document.getElementById('table-body');
+    let bSum = 0, dSum = 0, cvSum = 0;
+    tbody.innerHTML = rows.map(r => {
+      bSum += r.b; dSum += r.d; cvSum += r.cv;
+      return `<tr>
+        <td>${r.date}</td>
+        <td>¥${fmt(r.b)}</td>
+        <td>${r.c ? (r.c * 100).toFixed(1) + '%' : '—'}</td>
+        <td>¥${fmt(r.d)}</td>
+        <td>${r.cv}件</td>
+        <td>¥${fmt(r.cpa)}</td>
+      </tr>`;
+    }).join('') + `<tr>
+      <td class="td-total">${month+1}月合計 / 平均</td>
+      <td class="td-total">¥${fmt(bSum)}</td>
+      <td class="td-total">—</td>
+      <td class="td-total">¥${fmt(dSum)}</td>
+      <td class="td-total">${cvSum}件</td>
+      <td class="td-total">¥${fmt(cvSum > 0 ? dSum / cvSum : 0)}</td>
+    </tr>`;
+
+    // Footer
+    document.getElementById('footer').textContent =
+      `ミルクG Web広告レポート ／ スマートニュース ／ ${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} 自動集計`;
+
+    // Show page
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('page').style.display = 'block';
+
+    // Puppeteerがスクショタイミングを検知するためのフラグ
+    document.documentElement.dataset.loaded = 'true';
+  }
+
+  fetch(GAS_URL)
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      render(data);
+    })
+    .catch(err => {
+      document.getElementById('loading').textContent = '⚠ データ取得エラー: ' + err.message;
+    });
+</script>
+</body>
+</html>
