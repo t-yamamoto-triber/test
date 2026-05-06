@@ -1,0 +1,48 @@
+name: rawデータ自動更新（AFAD + スマートニュース）
+
+on:
+  schedule:
+    - cron: '0 15 * * *'  # 毎日 0:00 AM JST（UTC 15:00）
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install
+
+      - name: Playwright ブラウザキャッシュ
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package.json') }}
+
+      - run: npx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      - run: npx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - name: AFAD → CV_raw 更新
+        run: node scripts/upload-afad.mjs
+        env:
+          AFAD_ID: ${{ secrets.AFAD_ID }}
+          AFAD_PASSWORD: ${{ secrets.AFAD_PASSWORD }}
+          GAS_URL: ${{ secrets.GAS_URL }}
+          CHATWORK_TOKEN: ${{ secrets.CHATWORK_TOKEN }}
+          CHATWORK_ROOM_ID: ${{ secrets.CHATWORK_ROOM_ID }}
+
+      - name: スマートニュース → SN_raw 更新
+        run: node scripts/upload-smartnews.mjs
+        env:
+          SN_AUTH_STATE: ${{ secrets.SN_AUTH_STATE }}
+          GAS_URL: ${{ secrets.GAS_URL }}
+          CHATWORK_TOKEN: ${{ secrets.CHATWORK_TOKEN }}
+          CHATWORK_ROOM_ID: ${{ secrets.CHATWORK_ROOM_ID }}
