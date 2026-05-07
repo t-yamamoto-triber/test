@@ -97,62 +97,61 @@ async function main() {
     }
     await page.waitForTimeout(500);
 
-    // ── 日付をカレンダーUIで設定 ──
+    // ── 日付を設定（「今月」プリセットを使用） ──
     console.log(`📅 日付設定: ${start} 〜 ${end}`);
-
-    const [sy, sm, sd] = start.split('/').map(Number); // 例: 2026/05/01
-    const [ey, em, ed] = end.split('/').map(Number);   // 例: 2026/05/06
-
-    // ページ上の全 visible テキスト input を列挙してデバッグ
-    const visibleInputs = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('input[type="text"]'))
-        .map(el => ({
-          id: el.id, name: el.name, value: el.value,
-          visible: el.offsetParent !== null && getComputedStyle(el).display !== 'none'
-        }))
-    );
-    console.log('📋 テキスト入力一覧:', JSON.stringify(visibleInputs));
 
     // セット前スクリーンショット
     await page.screenshot({ path: path.join(downloadDir, 'afad-01-before-date.png') });
 
-    // JS の .click() で非表示要素でも開ける（Playwright の可視チェックを迂回）
-    await page.evaluate(() => {
-      const el = document.getElementById('searchReportStartDate');
-      if (el) el.click();
-    });
+    // 正しい visible input（searchReportAt）をクリックしてカレンダーを開く
+    await page.locator('#searchReportAt').click();
     await page.waitForTimeout(1000);
 
     // カレンダーが開いた後のスクリーンショット
     await page.screenshot({ path: path.join(downloadDir, 'afad-02-calendar-open.png') });
 
-    // ── カレンダーのセルで日付をクリック ──
-    // 開始日: 今月1日
-    const startCell = page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${sd}$`) }).first();
-    if (await startCell.count() > 0) {
-      await startCell.click();
-      console.log(`✅ 開始日 ${sd}日 クリック`);
-    } else {
-      console.log(`⚠ 開始日セル(${sd})が見つからない`);
+    // 「今月」プリセットを探してクリック（Bootstrap daterangepicker の左側パネル）
+    const presetLabels = ['今月', '今月全体', '当月', 'This Month'];
+    let presetClicked = false;
+    for (const label of presetLabels) {
+      const btn = page.locator('li, button, a').filter({ hasText: new RegExp(`^${label}$`) });
+      if (await btn.count() > 0) {
+        await btn.first().click();
+        console.log(`✅ プリセット「${label}」をクリック`);
+        presetClicked = true;
+        break;
+      }
     }
-    await page.waitForTimeout(300);
 
-    // 終了日: 昨日
-    const endCell = page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${ed}$`) }).first();
-    if (await endCell.count() > 0) {
-      await endCell.click();
-      console.log(`✅ 終了日 ${ed}日 クリック`);
-    } else {
-      console.log(`⚠ 終了日セル(${ed})が見つからない`);
+    if (!presetClicked) {
+      // プリセットがなければカレンダーのセルをクリックして手動設定
+      console.log('⚠ プリセットが見つからないため手動設定');
+      const [, , sd] = start.split('/').map(Number);
+      const [, , ed] = end.split('/').map(Number);
+
+      // 開始日（月1日）
+      await page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${sd}$`) }).first().click().catch(() => {
+        console.log(`⚠ 開始日セル(${sd})クリック失敗`);
+      });
+      await page.waitForTimeout(300);
+
+      // 終了日
+      await page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${ed}$`) }).first().click().catch(() => {
+        console.log(`⚠ 終了日セル(${ed})クリック失敗`);
+      });
+      await page.waitForTimeout(300);
     }
-    await page.waitForTimeout(300);
 
-    // Escape でカレンダーを閉じる
-    await page.keyboard.press('Escape');
+    // 「適用」ボタンがあればクリック（daterangepicker の確定ボタン）
+    await page.locator('button').filter({ hasText: /^(適用|Apply|確定)$/ }).first().click().catch(() => {});
     await page.waitForTimeout(500);
 
-    // 日付セット後スクリーンショット（入力欄に正しい日付が反映されているか確認）
+    // 日付セット後スクリーンショット
     await page.screenshot({ path: path.join(downloadDir, 'afad-03-after-date.png') });
+
+    // 設定された日付を確認
+    const dateVal = await page.locator('#searchReportAt').inputValue().catch(() => '取得失敗');
+    console.log(`📅 設定後の日付入力値: ${dateVal}`);
 
     // ── 広告主 = ミルクG ──
     console.log('🏢 広告主を「ミルクG」に設定...');
