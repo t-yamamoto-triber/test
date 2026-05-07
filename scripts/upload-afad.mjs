@@ -110,40 +110,24 @@ async function main() {
     // カレンダーが開いた後のスクリーンショット
     await page.screenshot({ path: path.join(downloadDir, 'afad-02-calendar-open.png') });
 
-    // 「今月」プリセットを探してクリック（Bootstrap daterangepicker の左側パネル）
-    const presetLabels = ['今月', '今月全体', '当月', 'This Month'];
-    let presetClicked = false;
-    for (const label of presetLabels) {
-      const btn = page.locator('li, button, a').filter({ hasText: new RegExp(`^${label}$`) });
-      if (await btn.count() > 0) {
-        await btn.first().click();
-        console.log(`✅ プリセット「${label}」をクリック`);
-        presetClicked = true;
-        break;
-      }
-    }
+    // 「今月」ボタンを JS 経由でクリック（オーバーレイによるポインター横取りを回避）
+    const presetResult = await page.evaluate(() => {
+      // id="current_month" の「今月」ボタンを優先
+      const btn = document.getElementById('current_month')
+        || Array.from(document.querySelectorAll('button, li, a'))
+             .find(el => el.textContent.trim() === '今月');
+      if (btn) { btn.click(); return { clicked: true, id: btn.id, text: btn.textContent.trim() }; }
+      return { clicked: false };
+    });
+    console.log(`📅 プリセットクリック結果:`, JSON.stringify(presetResult));
+    await page.waitForTimeout(500);
 
-    if (!presetClicked) {
-      // プリセットがなければカレンダーのセルをクリックして手動設定
-      console.log('⚠ プリセットが見つからないため手動設定');
-      const [, , sd] = start.split('/').map(Number);
-      const [, , ed] = end.split('/').map(Number);
-
-      // 開始日（月1日）
-      await page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${sd}$`) }).first().click().catch(() => {
-        console.log(`⚠ 開始日セル(${sd})クリック失敗`);
-      });
-      await page.waitForTimeout(300);
-
-      // 終了日
-      await page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${ed}$`) }).first().click().catch(() => {
-        console.log(`⚠ 終了日セル(${ed})クリック失敗`);
-      });
-      await page.waitForTimeout(300);
-    }
-
-    // 「適用」ボタンがあればクリック（daterangepicker の確定ボタン）
-    await page.locator('button').filter({ hasText: /^(適用|Apply|確定)$/ }).first().click().catch(() => {});
+    // 「適用」ボタンも JS 経由でクリック
+    await page.evaluate(() => {
+      const applyBtn = Array.from(document.querySelectorAll('button'))
+        .find(el => /適用|Apply|確定/.test(el.textContent.trim()));
+      if (applyBtn) applyBtn.click();
+    }).catch(() => {});
     await page.waitForTimeout(500);
 
     // 日付セット後スクリーンショット
