@@ -100,40 +100,50 @@ async function main() {
     // ── 日付をカレンダーUIで設定 ──
     console.log(`📅 日付設定: ${start} 〜 ${end}`);
 
-    // 日付をパース
-    const [sy, sm, sd] = start.split('/').map(Number); // start: 2026/05/01
-    const [ey, em, ed] = end.split('/').map(Number);   // end:   2026/05/06
+    const [sy, sm, sd] = start.split('/').map(Number); // 例: 2026/05/01
+    const [ey, em, ed] = end.split('/').map(Number);   // 例: 2026/05/06
 
-    // 日付入力欄（範囲ピッカー）をクリックしてカレンダーを開く
-    const dateRangeInput = page.locator('#searchReportStartDate, input[name="searchReportStartDate"]').first();
-    await dateRangeInput.click({ force: true });
-    await page.waitForTimeout(800);
+    // ページ上の全 visible テキスト input を列挙してデバッグ
+    const visibleInputs = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('input[type="text"]'))
+        .map(el => ({
+          id: el.id, name: el.name, value: el.value,
+          visible: el.offsetParent !== null && getComputedStyle(el).display !== 'none'
+        }))
+    );
+    console.log('📋 テキスト入力一覧:', JSON.stringify(visibleInputs));
+
+    // セット前スクリーンショット
+    await page.screenshot({ path: path.join(downloadDir, 'afad-01-before-date.png') });
+
+    // JS の .click() で非表示要素でも開ける（Playwright の可視チェックを迂回）
+    await page.evaluate(() => {
+      const el = document.getElementById('searchReportStartDate');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(1000);
 
     // カレンダーが開いた後のスクリーンショット
-    await page.screenshot({ path: path.join(downloadDir, 'afad-01-calendar-open.png') });
+    await page.screenshot({ path: path.join(downloadDir, 'afad-02-calendar-open.png') });
 
-    // カレンダー内で開始日（月1日）をクリック
-    // .day セルで「1」というテキストを持つものを探す（"prev" や "next" クラスを避ける）
-    const startDayCell = page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${sd}$`) }).first();
-    if (await startDayCell.count() > 0) {
-      await startDayCell.click();
+    // ── カレンダーのセルで日付をクリック ──
+    // 開始日: 今月1日
+    const startCell = page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${sd}$`) }).first();
+    if (await startCell.count() > 0) {
+      await startCell.click();
       console.log(`✅ 開始日 ${sd}日 クリック`);
     } else {
-      // 月ナビゲーション後に再試行
-      console.log('⚠ 開始日セルが見つからない、月移動を試みる');
-      await page.locator('.datepicker-days th.prev').first().click().catch(() => {});
-      await page.waitForTimeout(300);
-      await page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${sd}$`) }).first().click().catch(() => {});
+      console.log(`⚠ 開始日セル(${sd})が見つからない`);
     }
     await page.waitForTimeout(300);
 
-    // 終了日をクリック
-    const endDayCell = page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${ed}$`) }).first();
-    if (await endDayCell.count() > 0) {
-      await endDayCell.click();
+    // 終了日: 昨日
+    const endCell = page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${ed}$`) }).first();
+    if (await endCell.count() > 0) {
+      await endCell.click();
       console.log(`✅ 終了日 ${ed}日 クリック`);
     } else {
-      console.log('⚠ 終了日セルが見つからない');
+      console.log(`⚠ 終了日セル(${ed})が見つからない`);
     }
     await page.waitForTimeout(300);
 
@@ -141,8 +151,8 @@ async function main() {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
 
-    // 日付セット後のスクリーンショット（入力欄に正しい日付が入ったか）
-    await page.screenshot({ path: path.join(downloadDir, 'afad-02-after-date.png') });
+    // 日付セット後スクリーンショット（入力欄に正しい日付が反映されているか確認）
+    await page.screenshot({ path: path.join(downloadDir, 'afad-03-after-date.png') });
 
     // ── 広告主 = ミルクG ──
     console.log('🏢 広告主を「ミルクG」に設定...');
@@ -168,7 +178,7 @@ async function main() {
     console.log('✅ 検索完了');
 
     // 検索後スクリーンショット（結果行数を確認）
-    await page.screenshot({ path: path.join(downloadDir, 'afad-03-after-search.png'), fullPage: true });
+    await page.screenshot({ path: path.join(downloadDir, 'afad-04-after-search.png'), fullPage: true });
 
     // ── CSV生成・ダウンロード ──
     console.log('⬇️ CSV生成...');
