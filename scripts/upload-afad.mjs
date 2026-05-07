@@ -85,102 +85,64 @@ async function main() {
     await page.getByText('絞り込み検索').first().click();
     await page.waitForTimeout(800);
 
-    // ── 日別 を選択（チェックボックス or ラジオボタン対応） ──
+    // ── 日別 を選択 ──
     console.log('📆 「日別」を選択...');
-    // まずラベルから探す（最も確実）
     const dailyLabel = page.locator('label').filter({ hasText: /^日別$/ });
     if (await dailyLabel.count() > 0) {
       await dailyLabel.first().click();
-      console.log('✅ 日別: ラベルクリック成功');
+      console.log('✅ 日別: ラベルクリック');
     } else {
-      // input（checkbox/radio）を直接探す
-      const dailyInput = page.locator('input[type="checkbox"][value*="daily"], input[type="radio"][value*="daily"], input[type="checkbox"][id*="daily"], input[type="radio"][id*="daily"]');
-      if (await dailyInput.count() > 0) {
-        await dailyInput.first().click({ force: true });
-        console.log('✅ 日別: input直接クリック');
-      } else {
-        await page.getByText('日別').first().click();
-        console.log('✅ 日別: テキストクリック');
-      }
+      await page.getByText('日別').first().click();
+      console.log('✅ 日別: テキストクリック');
     }
     await page.waitForTimeout(500);
 
-    // 日別選択後のスクリーンショット（正しく選択されたか確認）
-    await page.screenshot({ path: path.join(downloadDir, 'afad-00-daily-selected.png') });
-
-    // ── 日付を設定（Bootstrap datepicker対応） ──
+    // ── 日付をカレンダーUIで設定 ──
     console.log(`📅 日付設定: ${start} 〜 ${end}`);
 
-    // セット前スクリーンショット
-    await page.screenshot({ path: path.join(downloadDir, 'afad-01-before-date.png') });
+    // 日付をパース
+    const [sy, sm, sd] = start.split('/').map(Number); // start: 2026/05/01
+    const [ey, em, ed] = end.split('/').map(Number);   // end:   2026/05/06
 
-    // datepicker の設定情報を取得
-    const dpConfig = await page.evaluate(() => {
-      const el = document.getElementById('searchReportStartDate');
-      if (!el) return { error: 'element not found' };
-      const info = { value: el.value, readOnly: el.readOnly, type: el.type };
-      if (typeof $ !== 'undefined') {
-        const dp = $(el).data('datepicker');
-        if (dp) {
-          info.dpFormat = dp.o?.format;
-          info.dpMinViewMode = dp.o?.minViewMode;
-          info.dpDate = dp.date?.toString?.();
-        } else {
-          info.dpError = 'no datepicker instance';
-        }
-      } else {
-        info.dpError = 'no jQuery';
-      }
-      return info;
-    });
-    console.log('📋 datepicker設定:', JSON.stringify(dpConfig));
+    // 日付入力欄（範囲ピッカー）をクリックしてカレンダーを開く
+    const dateRangeInput = page.locator('#searchReportStartDate, input[name="searchReportStartDate"]').first();
+    await dateRangeInput.click({ force: true });
+    await page.waitForTimeout(800);
 
-    // Bootstrap datepicker API でセット（Date オブジェクト）
-    const dateResult = await page.evaluate(({ s, e }) => {
-      function setBootstrapDate(id, dateStr) {
-        const el = document.getElementById(id);
-        if (!el) return { ok: false, reason: 'not found' };
+    // カレンダーが開いた後のスクリーンショット
+    await page.screenshot({ path: path.join(downloadDir, 'afad-01-calendar-open.png') });
 
-        const [y, m, d] = dateStr.split('/').map(Number);
-        const dateObj = new Date(y, m - 1, d);
+    // カレンダー内で開始日（月1日）をクリック
+    // .day セルで「1」というテキストを持つものを探す（"prev" や "next" クラスを避ける）
+    const startDayCell = page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${sd}$`) }).first();
+    if (await startDayCell.count() > 0) {
+      await startDayCell.click();
+      console.log(`✅ 開始日 ${sd}日 クリック`);
+    } else {
+      // 月ナビゲーション後に再試行
+      console.log('⚠ 開始日セルが見つからない、月移動を試みる');
+      await page.locator('.datepicker-days th.prev').first().click().catch(() => {});
+      await page.waitForTimeout(300);
+      await page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${sd}$`) }).first().click().catch(() => {});
+    }
+    await page.waitForTimeout(300);
 
-        if (typeof $ !== 'undefined') {
-          const $el = $(el);
-          const dp = $el.data('datepicker');
-          if (dp) {
-            $el.datepicker('setDate', dateObj);
-            $el.datepicker('update');
-            return { ok: true, method: 'bootstrap-setDate', value: el.value };
-          }
-          // datepicker がなければ直接 val() でセット
-          const fmt = dp?.o?.format || '';
-          const pad = n => String(n).padStart(2, '0');
-          let formatted = dateStr;
-          if (fmt.includes('年')) {
-            formatted = `${y}年${pad(m)}月${pad(d)}日`;
-          }
-          $el.val(formatted).trigger('change');
-          return { ok: true, method: 'jquery-val', value: el.value };
-        }
+    // 終了日をクリック
+    const endDayCell = page.locator('td.day:not(.old):not(.new)').filter({ hasText: new RegExp(`^${ed}$`) }).first();
+    if (await endDayCell.count() > 0) {
+      await endDayCell.click();
+      console.log(`✅ 終了日 ${ed}日 クリック`);
+    } else {
+      console.log('⚠ 終了日セルが見つからない');
+    }
+    await page.waitForTimeout(300);
 
-        // jQuery がない場合はネイティブ
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        setter.call(el, dateStr);
-        ['change', 'input'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true })));
-        return { ok: true, method: 'native', value: el.value };
-      }
-
-      return {
-        start: setBootstrapDate('searchReportStartDate', s),
-        end:   setBootstrapDate('searchReportEndDate', e)
-      };
-    }, { s: start, e: end });
-
-    console.log('📅 日付セット結果:', JSON.stringify(dateResult));
-
-    // セット後スクリーンショット（日付が正しく入ったか確認）
-    await page.screenshot({ path: path.join(downloadDir, 'afad-02-after-date.png') });
+    // Escape でカレンダーを閉じる
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
+
+    // 日付セット後のスクリーンショット（入力欄に正しい日付が入ったか）
+    await page.screenshot({ path: path.join(downloadDir, 'afad-02-after-date.png') });
 
     // ── 広告主 = ミルクG ──
     console.log('🏢 広告主を「ミルクG」に設定...');
@@ -193,15 +155,19 @@ async function main() {
       await page.locator('input[name*="advertiser"], input[id*="advertiser"], input[placeholder*="広告主"]').first().fill('ミルクG').catch(() => {});
     }
 
-    // ── 検索 ──
+    // ── 検索（フォームの検索ボタンを確実にクリック） ──
     console.log('🔎 検索実行...');
-    await page.getByRole('button', { name: '検索' }).click().catch(async () => {
-      await page.getByText('検索').first().click();
-    });
+    // カレンダーが閉じていることを確認してからクリック
+    await page.locator('.datepicker').first().evaluate(el => el.style.display = 'none').catch(() => {});
+    const searchBtn = page.locator('button[type="submit"]').filter({ hasText: '検索' })
+      .or(page.locator('input[type="submit"][value="検索"]'))
+      .or(page.locator('button').filter({ hasText: /^検索$/ }))
+      .last(); // カレンダー内のボタンではなくフォームのボタン（最後）
+    await searchBtn.click({ force: true });
     await page.waitForLoadState('networkidle');
     console.log('✅ 検索完了');
 
-    // 検索後スクリーンショット（結果の日付範囲を確認）
+    // 検索後スクリーンショット（結果行数を確認）
     await page.screenshot({ path: path.join(downloadDir, 'afad-03-after-search.png'), fullPage: true });
 
     // ── CSV生成・ダウンロード ──
