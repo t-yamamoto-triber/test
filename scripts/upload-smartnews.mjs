@@ -67,55 +67,68 @@ async function main() {
     console.log('🌐 スマートニュース管理画面にアクセス...');
     await page.goto('https://ads.smartnews.com/bm/businesses', { waitUntil: 'networkidle', timeout: 30000 });
 
-    // ログイン状態を確認（ログインページにリダイレクトされていたらセッション切れ）
+    // ログイン状態を確認
     if (page.url().includes('accounts.smartnews.com') || page.url().includes('signIn')) {
       throw new Error('SESSION_EXPIRED');
     }
     console.log(`✅ ログイン済み: ${page.url()}`);
 
-    // ── レポートページに移動 ──
+    // URLからビジネスIDを抽出（例: /bm/businesses/102459874/...）
+    const bizIdMatch = page.url().match(/businesses\/(\d+)/);
+    const bizId = bizIdMatch ? bizIdMatch[1] : null;
+    console.log(`🏢 ビジネスID: ${bizId}`);
+
+    // スクリーンショット（ログイン後の画面）
+    await page.screenshot({ path: path.join(downloadDir, 'sn-01-after-login.png') });
+
+    // ── レポートページに直接移動 ──
     console.log('📊 レポートページに移動...');
-    // スマートニュースの報告書URL（キャンペーンレポート）
-    await page.goto('https://ads.smartnews.com/bm/businesses', { waitUntil: 'networkidle' });
-
-    // レポートメニューを探す
-    await page.getByText('レポート').first().click().catch(async () => {
-      await page.locator('a[href*="report"], a[href*="analytics"]').first().click();
-    });
-    await page.waitForLoadState('networkidle');
-
-    // ── 日別表示 ──
-    console.log('📆 日別を選択...');
-    await page.getByText('日別').first().click().catch(async () => {
-      await page.getByRole('option', { name: '日別' }).click().catch(() => {});
-    });
-    await page.waitForTimeout(500);
-
-    // ── 日付範囲を設定 ──
-    console.log(`📅 日付設定: ${start} 〜 ${end}`);
-    // カスタム期間ボタンをクリック
-    await page.getByText('カスタム').click().catch(async () => {
-      await page.getByText('期間').first().click().catch(() => {});
-    });
-    await page.waitForTimeout(500);
-
-    // 日付入力
-    const dateInputs = page.locator('input[type="text"][placeholder*="-"], input[type="date"]');
-    if (await dateInputs.count() >= 2) {
-      await dateInputs.nth(0).fill(start);
-      await dateInputs.nth(1).fill(end);
-      await page.keyboard.press('Enter');
+    // ビジネスIDが取れた場合は直接URLで移動、取れない場合はナビゲーションから
+    if (bizId) {
+      // キャンペーンレポートURLを直接開く
+      const reportUrl = `https://ads.smartnews.com/bm/businesses/${bizId}/campaigns`;
+      await page.goto(reportUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      console.log(`✅ キャンペーンページ: ${page.url()}`);
     }
-    await page.waitForLoadState('networkidle');
+
+    await page.screenshot({ path: path.join(downloadDir, 'sn-02-report-page.png') });
+
+    // ── 日別表示に切り替え ──
+    console.log('📆 日別を選択...');
+    // ディメンション選択（Daily/日別）
+    await page.getByText('日別').first().click().catch(async () => {
+      await page.getByText('Daily').first().click().catch(() => {});
+    });
+    await page.waitForTimeout(1000);
+
+    // ── 日付範囲を設定（今月） ──
+    console.log(`📅 日付設定: ${start} 〜 ${end}`);
+    // 期間選択ドロップダウンを開く
+    const datePickerTriggers = [
+      () => page.getByText('今月').click(),
+      () => page.getByText('This Month').click(),
+      () => page.locator('[data-testid*="date"], [class*="date-picker"], [class*="DatePicker"]').first().click(),
+      () => page.getByText('カスタム').click(),
+    ];
+    for (const trigger of datePickerTriggers) {
+      const ok = await trigger().then(() => true).catch(() => false);
+      if (ok) { console.log('✅ 期間選択クリック成功'); break; }
+    }
+    await page.waitForTimeout(1000);
+
+    await page.screenshot({ path: path.join(downloadDir, 'sn-03-date-set.png') });
 
     // ── CSVダウンロード ──
     console.log('⬇️ CSVをダウンロード...');
+    await page.screenshot({ path: path.join(downloadDir, 'sn-04-before-download.png') });
     const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
 
-    // ダウンロードボタンを探す（複数の候補）
     await page.getByRole('button', { name: /ダウンロード|download|CSV/i }).first().click().catch(async () => {
       await page.getByText('レポートをダウンロード').click().catch(async () => {
-        await page.locator('[aria-label*="ダウンロード"], [title*="ダウンロード"]').first().click();
+        await page.locator('[aria-label*="ダウンロード"], [title*="ダウンロード"], [aria-label*="download"], [aria-label*="export"]').first().click().catch(async () => {
+          // アイコンボタンを探す
+          await page.locator('button').filter({ has: page.locator('svg, i[class*="download"], i[class*="export"]') }).first().click();
+        });
       });
     });
 

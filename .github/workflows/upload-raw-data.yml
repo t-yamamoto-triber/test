@@ -54,3 +54,11 @@ jobs:
           GAS_URL: ${{ secrets.GAS_URL }}
           CHATWORK_TOKEN: ${{ secrets.CHATWORK_TOKEN }}
           CHATWORK_ROOM_ID: ${{ secrets.CHATWORK_ROOM_ID }}
+
+      - name: SNデバッグ用スクリーンショット保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sn-debug-screenshots
+          path: output/downloads/sn-*.png
+          if-no-files-found: ignore
