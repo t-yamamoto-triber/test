@@ -83,11 +83,10 @@ async function main() {
     // ── 絞り込み検索 ──
     console.log('🔍 絞り込み検索を開く...');
     await page.getByText('絞り込み検索').first().click();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(800);
 
     // ── 日別 を選択 ──
     console.log('📆 「日別」を選択...');
-    // ラジオボタンまたはセレクトボックスで「日別」を選択
     const dailyRadio = page.locator('input[type="radio"]').filter({ hasText: '日別' });
     if (await dailyRadio.count() > 0) {
       await dailyRadio.click();
@@ -98,39 +97,80 @@ async function main() {
         });
       });
     }
+    await page.waitForTimeout(500);
 
-    // ── 日付を設定（datepicker対応） ──
+    // ── 日付を設定（Bootstrap datepicker対応） ──
     console.log(`📅 日付設定: ${start} 〜 ${end}`);
 
-    // 日付形式を「yyyy年MM月dd日」に変換
-    const toJpDate = (str) => {
-      const [y, m, d] = str.split('/');
-      return `${y}年${m}月${d}日`;
-    };
-    const startJp = toJpDate(start);
-    const endJp   = toJpDate(end);
+    // セット前スクリーンショット
+    await page.screenshot({ path: path.join(downloadDir, 'afad-01-before-date.png') });
 
-    // JavaScript経由で直接セット（datepickerのhidden inputを含む）
-    const dateResult = await page.evaluate(({ s, e, sJp, eJp }) => {
-      function setVal(el, val) {
-        if (!el) return false;
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        setter.call(el, val);
-        ['input','change','blur'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true })));
-        // Bootstrap datepicker対応
-        if (typeof $ !== 'undefined') {
-          try { $(el).datepicker('setDate', val); } catch(e) {}
+    // datepicker の設定情報を取得
+    const dpConfig = await page.evaluate(() => {
+      const el = document.getElementById('searchReportStartDate');
+      if (!el) return { error: 'element not found' };
+      const info = { value: el.value, readOnly: el.readOnly, type: el.type };
+      if (typeof $ !== 'undefined') {
+        const dp = $(el).data('datepicker');
+        if (dp) {
+          info.dpFormat = dp.o?.format;
+          info.dpMinViewMode = dp.o?.minViewMode;
+          info.dpDate = dp.date?.toString?.();
+        } else {
+          info.dpError = 'no datepicker instance';
         }
-        return true;
+      } else {
+        info.dpError = 'no jQuery';
       }
-      const startEl = document.getElementById('searchReportStartDate') || document.querySelector('[name="searchReportStartDate"]');
-      const endEl   = document.getElementById('searchReportEndDate')   || document.querySelector('[name="searchReportEndDate"]');
-      const r1 = setVal(startEl, sJp) || setVal(startEl, s);
-      const r2 = setVal(endEl,   eJp) || setVal(endEl,   e);
-      return { start: r1, end: r2, startId: startEl?.id, endId: endEl?.id };
-    }, { s: start, e: end, sJp: startJp, eJp: endJp });
+      return info;
+    });
+    console.log('📋 datepicker設定:', JSON.stringify(dpConfig));
+
+    // Bootstrap datepicker API でセット（Date オブジェクト）
+    const dateResult = await page.evaluate(({ s, e }) => {
+      function setBootstrapDate(id, dateStr) {
+        const el = document.getElementById(id);
+        if (!el) return { ok: false, reason: 'not found' };
+
+        const [y, m, d] = dateStr.split('/').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+
+        if (typeof $ !== 'undefined') {
+          const $el = $(el);
+          const dp = $el.data('datepicker');
+          if (dp) {
+            $el.datepicker('setDate', dateObj);
+            $el.datepicker('update');
+            return { ok: true, method: 'bootstrap-setDate', value: el.value };
+          }
+          // datepicker がなければ直接 val() でセット
+          const fmt = dp?.o?.format || '';
+          const pad = n => String(n).padStart(2, '0');
+          let formatted = dateStr;
+          if (fmt.includes('年')) {
+            formatted = `${y}年${pad(m)}月${pad(d)}日`;
+          }
+          $el.val(formatted).trigger('change');
+          return { ok: true, method: 'jquery-val', value: el.value };
+        }
+
+        // jQuery がない場合はネイティブ
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(el, dateStr);
+        ['change', 'input'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true })));
+        return { ok: true, method: 'native', value: el.value };
+      }
+
+      return {
+        start: setBootstrapDate('searchReportStartDate', s),
+        end:   setBootstrapDate('searchReportEndDate', e)
+      };
+    }, { s: start, e: end });
 
     console.log('📅 日付セット結果:', JSON.stringify(dateResult));
+
+    // セット後スクリーンショット（日付が正しく入ったか確認）
+    await page.screenshot({ path: path.join(downloadDir, 'afad-02-after-date.png') });
     await page.waitForTimeout(500);
 
     // ── 広告主 = ミルクG ──
@@ -151,6 +191,9 @@ async function main() {
     });
     await page.waitForLoadState('networkidle');
     console.log('✅ 検索完了');
+
+    // 検索後スクリーンショット（結果の日付範囲を確認）
+    await page.screenshot({ path: path.join(downloadDir, 'afad-03-after-search.png'), fullPage: true });
 
     // ── CSV生成・ダウンロード ──
     console.log('⬇️ CSV生成...');

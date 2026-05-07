@@ -39,6 +39,14 @@ jobs:
           CHATWORK_TOKEN: ${{ secrets.CHATWORK_TOKEN }}
           CHATWORK_ROOM_ID: ${{ secrets.CHATWORK_ROOM_ID }}
 
+      - name: デバッグ用スクリーンショット保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: afad-debug-screenshots
+          path: scripts/../output/downloads/*.png
+          if-no-files-found: ignore
+
       - name: スマートニュース → SN_raw 更新
         run: node scripts/upload-smartnews.mjs
         env:
