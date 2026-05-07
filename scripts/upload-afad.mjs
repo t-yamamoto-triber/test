@@ -85,19 +85,28 @@ async function main() {
     await page.getByText('絞り込み検索').first().click();
     await page.waitForTimeout(800);
 
-    // ── 日別 を選択 ──
+    // ── 日別 を選択（チェックボックス or ラジオボタン対応） ──
     console.log('📆 「日別」を選択...');
-    const dailyRadio = page.locator('input[type="radio"]').filter({ hasText: '日別' });
-    if (await dailyRadio.count() > 0) {
-      await dailyRadio.click();
+    // まずラベルから探す（最も確実）
+    const dailyLabel = page.locator('label').filter({ hasText: /^日別$/ });
+    if (await dailyLabel.count() > 0) {
+      await dailyLabel.first().click();
+      console.log('✅ 日別: ラベルクリック成功');
     } else {
-      await page.getByRole('radio', { name: '日別' }).click().catch(async () => {
-        await page.getByLabel('日別').click().catch(async () => {
-          await page.getByText('日別').first().click();
-        });
-      });
+      // input（checkbox/radio）を直接探す
+      const dailyInput = page.locator('input[type="checkbox"][value*="daily"], input[type="radio"][value*="daily"], input[type="checkbox"][id*="daily"], input[type="radio"][id*="daily"]');
+      if (await dailyInput.count() > 0) {
+        await dailyInput.first().click({ force: true });
+        console.log('✅ 日別: input直接クリック');
+      } else {
+        await page.getByText('日別').first().click();
+        console.log('✅ 日別: テキストクリック');
+      }
     }
     await page.waitForTimeout(500);
+
+    // 日別選択後のスクリーンショット（正しく選択されたか確認）
+    await page.screenshot({ path: path.join(downloadDir, 'afad-00-daily-selected.png') });
 
     // ── 日付を設定（Bootstrap datepicker対応） ──
     console.log(`📅 日付設定: ${start} 〜 ${end}`);
@@ -210,7 +219,10 @@ async function main() {
 
     // ── GAS 経由でスプレッドシートに書き込み ──
     const csv = await fs.readFile(csvPath, 'utf-8');
-    console.log(`📤 GAS に送信中... (${csv.length} bytes)`);
+    const csvLines = csv.split('\n').filter(l => l.trim());
+    console.log(`📋 CSVプレビュー（先頭5行）:`);
+    csvLines.slice(0, 5).forEach((l, i) => console.log(`  [${i}] ${l.substring(0, 120)}`));
+    console.log(`📤 GAS に送信中... (${csv.length} bytes, ${csvLines.length}行)`);
 
     const res  = await fetch(GAS_URL, {
       method: 'POST',

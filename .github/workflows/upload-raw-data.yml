@@ -44,7 +44,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: afad-debug-screenshots
-          path: scripts/../output/downloads/*.png
+          path: output/downloads/*.png
           if-no-files-found: ignore
 
       - name: スマートニュース → SN_raw 更新
