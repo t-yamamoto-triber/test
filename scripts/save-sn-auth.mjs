@@ -41,31 +41,33 @@ async function main() {
   const authState = await fs.readFile(AUTH_PATH, 'utf-8');
   console.log(`📦 Cookie保存: ${AUTH_PATH} (${authState.length} bytes)`);
 
-  // GitHub Secrets に保存
-  if (GITHUB_PAT) {
-    console.log('📤 GitHub Secrets に SN_AUTH_STATE を保存中...');
+  // GitHub Secrets に保存（gh CLI 経由）
+  console.log('📤 GitHub Secrets に SN_AUTH_STATE を保存中...');
+  try {
+    execSync(`gh secret set SN_AUTH_STATE --body @${AUTH_PATH} --repo ${REPO}`, {
+      stdio: 'inherit'
+    });
+    console.log('✅ GitHub Secrets 保存完了！');
+    // 保存成功後にファイルを削除
+    await fs.unlink(AUTH_PATH).catch(() => {});
+  } catch {
+    // gh CLI が使えない場合：ファイルを残してクリップボードにコピー
+    console.log('\n⚠️ gh CLI での自動保存に失敗しました。手動で設定します。');
     try {
-      // gh CLI で保存（gh が認証済みの場合）
-      execSync(`gh secret set SN_AUTH_STATE --body '${authState.replace(/'/g, "'\\''")}' --repo ${REPO}`, {
-        stdio: 'inherit'
-      });
-      console.log('✅ GitHub Secrets 保存完了！');
+      execSync(`cat "${AUTH_PATH}" | pbcopy`);
+      console.log('✅ 認証データをクリップボードにコピーしました！');
     } catch {
-      // gh CLI が使えない場合はファイルに保存して案内
-      console.log('⚠️ gh CLI での保存に失敗しました。手動で設定してください：');
-      console.log(`1. https://github.com/${REPO}/settings/secrets/actions を開く`);
-      console.log('2. SN_AUTH_STATE という名前でシークレットを作成');
-      console.log(`3. 値: ${AUTH_PATH} の内容をコピー&ペースト`);
+      console.log(`📋 以下のコマンドで内容を確認できます: cat "${AUTH_PATH}"`);
     }
-  } else {
-    console.log('\n⚠️ GITHUB_PAT が未設定のため、手動でシークレットを設定してください：');
+    console.log('\n以下の手順で GitHub Secrets に登録してください：');
     console.log(`1. https://github.com/${REPO}/settings/secrets/actions を開く`);
-    console.log('2. SN_AUTH_STATE という名前でシークレットを作成');
-    console.log(`3. 値: ${AUTH_PATH} の内容をコピー&ペースト`);
+    console.log('2. 「New repository secret」をクリック');
+    console.log('3. Name: SN_AUTH_STATE');
+    console.log('4. Secret: クリップボードの内容をペースト（Cmd+V）');
+    console.log('5. 「Add secret」をクリック');
+    console.log(`\n⚠️  登録後、必ずこのファイルを削除してください: ${AUTH_PATH}`);
   }
 
-  // ローカルの認証ファイルを削除（セキュリティのため）
-  await fs.unlink(AUTH_PATH).catch(() => {});
   console.log('\n🎉 完了！次回から自動でスマートニュースにログインできます。');
 }
 

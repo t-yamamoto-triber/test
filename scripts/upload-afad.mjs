@@ -99,19 +99,39 @@ async function main() {
       });
     }
 
-    // ── 日付を設定 ──
+    // ── 日付を設定（datepicker対応） ──
     console.log(`📅 日付設定: ${start} 〜 ${end}`);
-    // 開始日
-    const startInputs = page.locator('input[type="text"], input[type="date"]');
-    const startCount = await startInputs.count();
-    if (startCount >= 2) {
-      await startInputs.nth(0).fill(start);
-      await startInputs.nth(1).fill(end);
-    } else {
-      // name/placeholder ベースで探す
-      await page.locator('input[name*="start"], input[id*="start"], input[placeholder*="開始"]').first().fill(start).catch(() => {});
-      await page.locator('input[name*="end"], input[id*="end"], input[placeholder*="終了"]').first().fill(end).catch(() => {});
-    }
+
+    // 日付形式を「yyyy年MM月dd日」に変換
+    const toJpDate = (str) => {
+      const [y, m, d] = str.split('/');
+      return `${y}年${m}月${d}日`;
+    };
+    const startJp = toJpDate(start);
+    const endJp   = toJpDate(end);
+
+    // JavaScript経由で直接セット（datepickerのhidden inputを含む）
+    const dateResult = await page.evaluate(({ s, e, sJp, eJp }) => {
+      function setVal(el, val) {
+        if (!el) return false;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(el, val);
+        ['input','change','blur'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true })));
+        // Bootstrap datepicker対応
+        if (typeof $ !== 'undefined') {
+          try { $(el).datepicker('setDate', val); } catch(e) {}
+        }
+        return true;
+      }
+      const startEl = document.getElementById('searchReportStartDate') || document.querySelector('[name="searchReportStartDate"]');
+      const endEl   = document.getElementById('searchReportEndDate')   || document.querySelector('[name="searchReportEndDate"]');
+      const r1 = setVal(startEl, sJp) || setVal(startEl, s);
+      const r2 = setVal(endEl,   eJp) || setVal(endEl,   e);
+      return { start: r1, end: r2, startId: startEl?.id, endId: endEl?.id };
+    }, { s: start, e: end, sJp: startJp, eJp: endJp });
+
+    console.log('📅 日付セット結果:', JSON.stringify(dateResult));
+    await page.waitForTimeout(500);
 
     // ── 広告主 = ミルクG ──
     console.log('🏢 広告主を「ミルクG」に設定...');
