@@ -36,3 +36,5 @@ jobs:
           CHATWORK_TOKEN: ${{ secrets.CHATWORK_TOKEN }}
           CHATWORK_ROOM_ID: ${{ secrets.CHATWORK_ROOM_ID }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
