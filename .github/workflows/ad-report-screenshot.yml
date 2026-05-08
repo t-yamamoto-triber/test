@@ -30,8 +30,9 @@ jobs:
       - run: npx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
 
-      - name: スクリーンショット撮影 & Chatwork投稿
+      - name: スクリーンショット撮影 & Chatwork/Slack投稿
         run: node scripts/ad-report-chatwork.mjs
         env:
           CHATWORK_TOKEN: ${{ secrets.CHATWORK_TOKEN }}
           CHATWORK_ROOM_ID: ${{ secrets.CHATWORK_ROOM_ID }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -1,24 +1,18 @@
 #!/usr/bin/env node
 /**
- * dashboard.html をスクリーンショット撮影して Chatwork に投稿する
+ * dashboard.html をスクリーンショット撮影して Chatwork/Slack に投稿する
  */
 
 import { chromium } from 'playwright';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { notify, notifyWithFile } from './notifier.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DASHBOARD_URL   = 'https://ad-report-design.surge.sh/dashboard.html';
 const SCREENSHOT_PATH = path.join(__dirname, '..', 'output', 'ad-report.png');
-const CHATWORK_TOKEN  = process.env.CHATWORK_TOKEN;
-const CHATWORK_ROOM   = process.env.CHATWORK_ROOM_ID;
-
-if (!CHATWORK_TOKEN || !CHATWORK_ROOM) {
-  console.error('❌ 環境変数 CHATWORK_TOKEN と CHATWORK_ROOM_ID を設定してください');
-  process.exit(1);
-}
 
 async function takeScreenshot() {
   console.log('🌐 ブラウザ起動中...');
@@ -62,72 +56,26 @@ function getYesterdayJST() {
   return `${yest.getUTCFullYear()}年${yest.getUTCMonth() + 1}月${yest.getUTCDate()}日`;
 }
 
-// ④ 料率入力完了メッセージを送信
-async function sendCompletionMessage(dateStr) {
-  const message = `✅ ${dateStr} 分の料率入力が完了しました。`;
-  await fetch(`https://api.chatwork.com/v2/rooms/${CHATWORK_ROOM}/messages`, {
-    method: 'POST',
-    headers: {
-      'X-ChatWorkToken': CHATWORK_TOKEN,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: `body=${encodeURIComponent(message)}`
-  });
-  console.log('✅ 完了メッセージ送信:', message);
-}
+async function postToAll() {
+  const dateStr = getYesterdayJST();
 
-async function postToChatwork() {
-  const dateStr = getYesterdayJST(); // ⑤ 前日の日付を使用
+  // ④ 料率入力完了メッセージ（Chatwork + Slack 両方）
+  await notify(`✅ ${dateStr} 分の料率入力が完了しました。`);
+  console.log('✅ 完了メッセージ送信');
 
-  // ④ まず完了メッセージを送信
-  await sendCompletionMessage(dateStr);
-
+  // ⑤ スクリーンショット付きレポート
   const fileData = await fs.readFile(SCREENSHOT_PATH);
-  const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
+  const reportMessage = `[info][title]📊 ${dateStr}迄の広告レポート[/title]スマートニュース 前日データ（料率確定後）[/info]`;
 
-  // multipart/form-data を手動構築
-  const messagePart =
-    `--${boundary}\r\n` +
-    `Content-Disposition: form-data; name="message"\r\n\r\n` +
-    `[info][title]📊 ${dateStr}迄の広告レポート[/title]スマートニュース 前日データ（料率確定後）[/info]\r\n`;
-
-  const filePart =
-    `--${boundary}\r\n` +
-    `Content-Disposition: form-data; name="file"; filename="ad-report.png"\r\n` +
-    `Content-Type: image/png\r\n\r\n`;
-
-  const ending = `\r\n--${boundary}--\r\n`;
-
-  const body = Buffer.concat([
-    Buffer.from(messagePart, 'utf8'),
-    Buffer.from(filePart, 'utf8'),
-    fileData,
-    Buffer.from(ending, 'utf8')
-  ]);
-
-  console.log(`📤 Chatwork に投稿中 (room: ${CHATWORK_ROOM})...`);
-  const res = await fetch(`https://api.chatwork.com/v2/rooms/${CHATWORK_ROOM}/files`, {
-    method: 'POST',
-    headers: {
-      'X-ChatWorkToken': CHATWORK_TOKEN,
-      'Content-Type': `multipart/form-data; boundary=${boundary}`
-    },
-    body
-  });
-
-  const json = await res.json().catch(() => ({}));
-  if (res.ok) {
-    console.log('✅ Chatwork 投稿成功:', json);
-  } else {
-    console.error('❌ Chatwork 投稿失敗:', res.status, json);
-    process.exit(1);
-  }
+  console.log('📤 レポートを送信中...');
+  await notifyWithFile(reportMessage, fileData, 'ad-report.png');
+  console.log('✅ レポート送信完了');
 }
 
 (async () => {
   try {
-    await takeScreenshot();
-    await postToChatwork();
+  await takeScreenshot();
+  await postToAll();
     console.log('🎉 完了');
   } catch (err) {
     console.error('❌ エラー:', err);
