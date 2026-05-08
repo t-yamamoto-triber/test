@@ -61,10 +61,10 @@ async function postToAll() {
   const fileData = await fs.readFile(SCREENSHOT_PATH);
 
   // Chatwork: ④ 完了メッセージ → ⑤ ファイル付きレポート（2通）
-  await notify(`✅ ${dateStr}迄の集計が完了しました。`);
+  await notify(`✅${dateStr}迄の集計が完了しました。`);
   console.log('✅ 完了メッセージ送信');
 
-  const reportMessage = `[info][title]📊 ${dateStr}迄の広告レポート[/title]スマートニュース 前日データ（料率確定後）[/info]`;
+  const reportMessage = `[info][title]📊${dateStr}迄の広告レポートを送ります。[/title]　スマートニュース ${dateStr}迄のデータ[/info]`;
 
   // Slack: 完了 + レポート + 画像を1通にまとめる
   const slackCombined = `✅${dateStr}迄の集計が完了しました。\n📊${dateStr}迄の広告レポートを送ります。\n\u3000スマートニュース ${dateStr}迄のデータ`;
