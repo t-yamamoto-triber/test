@@ -107,6 +107,27 @@ async function main() {
     await page.waitForTimeout(2000);
     await page.screenshot({ path: path.join(downloadDir, 'sn-04-after-report-click.png'), fullPage: true });
 
+    // モーダル内で「日別」を選択（集計の粒度）
+    const dailyResult = await page.evaluate(() => {
+      // label または radio ボタンで「日別」を探す
+      const labels = Array.from(document.querySelectorAll('label, span, div'));
+      const dailyLabel = labels.find(el => el.textContent.trim() === '日別');
+      if (dailyLabel) {
+        dailyLabel.click();
+        // 関連するinputも探してクリック
+        const input = dailyLabel.querySelector('input') || dailyLabel.previousElementSibling;
+        if (input?.tagName === 'INPUT') input.click();
+        return { clicked: true, method: 'label', text: dailyLabel.textContent.trim() };
+      }
+      // radio input で value が "daily" 等を探す
+      const radios = Array.from(document.querySelectorAll('input[type="radio"]'));
+      const daily = radios.find(r => /daily|日別/i.test(r.value + r.id + r.name + (r.labels?.[0]?.textContent || '')));
+      if (daily) { daily.click(); return { clicked: true, method: 'radio', value: daily.value }; }
+      return { clicked: false };
+    });
+    console.log('📆 日別選択:', JSON.stringify(dailyResult));
+    await page.waitForTimeout(500);
+
     // モーダル内の「ダウンロード」ボタンをクリック
     const modalBtnResult = await page.evaluate(() => {
       const candidates = Array.from(document.querySelectorAll('button, a, [role="button"]'));
