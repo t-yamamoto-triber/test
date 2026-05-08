@@ -173,12 +173,13 @@ export async function notify(text) {
 /**
  * ファイル（画像）付きメッセージを送信
  * Chatwork : ファイルアップロード
- * Slack    : SLACK_BOT_TOKEN 設定あり → ファイルアップロード
+ * Slack    : SLACK_BOT_TOKEN 設定あり → ファイルアップロード（slackText があればそちらを使用）
  *            未設定           → テキストのみ
  */
-export async function notifyWithFile(messageText, fileBuffer, filename = 'ad-report.png') {
+export async function notifyWithFile(messageText, fileBuffer, filename = 'ad-report.png', opts = {}) {
+  const slackText = opts.slackText ?? messageText;
   await Promise.all([
     sendChatworkFile(messageText, fileBuffer, filename),
-    sendSlackFile(messageText, fileBuffer, filename)
+    sendSlackFile(slackText, fileBuffer, filename)
   ]);
 }

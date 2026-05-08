@@ -58,17 +58,19 @@ function getYesterdayJST() {
 
 async function postToAll() {
   const dateStr = getYesterdayJST();
+  const fileData = await fs.readFile(SCREENSHOT_PATH);
 
-  // ④ 集計完了メッセージ（Chatwork + Slack 両方）
+  // Chatwork: ④ 完了メッセージ → ⑤ ファイル付きレポート（2通）
   await notify(`✅ ${dateStr}迄の集計が完了しました。`);
   console.log('✅ 完了メッセージ送信');
 
-  // ⑤ スクリーンショット付きレポート
-  const fileData = await fs.readFile(SCREENSHOT_PATH);
   const reportMessage = `[info][title]📊 ${dateStr}迄の広告レポート[/title]スマートニュース 前日データ（料率確定後）[/info]`;
 
+  // Slack: 完了 + レポート + 画像を1通にまとめる
+  const slackCombined = `✅ ${dateStr}迄の集計が完了しました。\n*📊 ${dateStr}迄の広告レポート*\nスマートニュース 前日データ（料率確定後）`;
+
   console.log('📤 レポートを送信中...');
-  await notifyWithFile(reportMessage, fileData, 'ad-report.png');
+  await notifyWithFile(reportMessage, fileData, 'ad-report.png', { slackText: slackCombined });
   console.log('✅ レポート送信完了');
 }
 
