@@ -124,30 +124,21 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
     });
     console.log('Slack Step2 status:', step2res.status);
 
-    // Step 3: アップロード完了
+    // Step 3: アップロード完了 + チャンネルに直接投稿
     const step3 = await fetch('https://slack.com/api/files.completeUploadExternal', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files: [{ id: file_id }] })
-    });
-    const body3 = await step3.json();
-    if (!body3.ok) throw new Error(`completeUploadExternal: ${body3.error}`);
-    const uploadedSize = body3.files?.[0]?.size ?? 'unknown';
-    console.log(`Slack Step3 完了 size:${uploadedSize}`);
-
-    // Step 4: chat.postMessage で file_ids 指定して投稿
-    const step4 = await fetch('https://slack.com/api/chat.postMessage', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        channel,
-        text: toSlackText(messageText),
-        file_ids: [file_id]
+        files: [{ id: file_id }],
+        channel_id: channel,
+        initial_comment: toSlackText(messageText)
       })
     });
-    const body4 = await step4.json();
-    console.log('Slack Step4:', body4.ok, body4.error ?? '');
-    if (!body4.ok) throw new Error(`chat.postMessage: ${body4.error}`);
+    const body3 = await step3.json();
+    const uploadedSize = body3.files?.[0]?.size ?? 'unknown';
+    const sharedChannels = body3.files?.[0]?.channels ?? [];
+    console.log(`Slack Step3: ok=${body3.ok} size=${uploadedSize} channels=${JSON.stringify(sharedChannels)} error=${body3.error ?? ''}`);
+    if (!body3.ok) throw new Error(`completeUploadExternal: ${body3.error}`);
     console.log('✅ Slack ファイル送信完了');
   } catch (e) {
     console.error('Slack ファイル送信エラー:', e.message);
