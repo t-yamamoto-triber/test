@@ -1,8 +1,7 @@
 /**
  * 通知ユーティリティ
  * Chatwork  : CHATWORK_TOKEN + CHATWORK_ROOM_ID
- * Slack テキスト: SLACK_WEBHOOK_URL
- * Slack ファイル: SLACK_BOT_TOKEN + SLACK_CHANNEL_ID
+ * Slack     : SLACK_BOT_TOKEN + SLACK_CHANNEL_ID（テキスト・ファイル両対応）
  * 設定されているサービスにだけ送信する（未設定はスキップ）
  */
 
@@ -56,13 +55,14 @@ function toSlackText(cwText) {
 }
 
 async function sendSlack(text) {
-  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
-  if (!webhookUrl) return;
+  const token   = process.env.SLACK_BOT_TOKEN;
+  const channel = process.env.SLACK_CHANNEL_ID;
+  if (!token || !channel) return;
 
-  await fetch(webhookUrl, {
+  await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: toSlackText(text) })
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel, text: toSlackText(text) })
   }).catch(e => console.error('Slack送信エラー:', e.message));
 }
 
