@@ -55,9 +55,32 @@ async function takeScreenshot() {
   await browser.close();
 }
 
+// JST で「前日」の日付文字列を返す
+function getYesterdayJST() {
+  const now  = new Date(Date.now() + 9 * 3600 * 1000);
+  const yest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  return `${yest.getUTCFullYear()}年${yest.getUTCMonth() + 1}月${yest.getUTCDate()}日`;
+}
+
+// ④ 料率入力完了メッセージを送信
+async function sendCompletionMessage(dateStr) {
+  const message = `✅ ${dateStr} 分の料率入力が完了しました。`;
+  await fetch(`https://api.chatwork.com/v2/rooms/${CHATWORK_ROOM}/messages`, {
+    method: 'POST',
+    headers: {
+      'X-ChatWorkToken': CHATWORK_TOKEN,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: `body=${encodeURIComponent(message)}`
+  });
+  console.log('✅ 完了メッセージ送信:', message);
+}
+
 async function postToChatwork() {
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+  const dateStr = getYesterdayJST(); // ⑤ 前日の日付を使用
+
+  // ④ まず完了メッセージを送信
+  await sendCompletionMessage(dateStr);
 
   const fileData = await fs.readFile(SCREENSHOT_PATH);
   const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
@@ -66,7 +89,7 @@ async function postToChatwork() {
   const messagePart =
     `--${boundary}\r\n` +
     `Content-Disposition: form-data; name="message"\r\n\r\n` +
-    `[info][title]📊 ${dateStr} Web広告レポート[/title]スマートニュース 前日データ（料率確定後）[/info]\r\n`;
+    `[info][title]📊 ${dateStr}迄の広告レポート[/title]スマートニュース 前日データ（料率確定後）[/info]\r\n`;
 
   const filePart =
     `--${boundary}\r\n` +

@@ -62,3 +62,9 @@ jobs:
           name: sn-debug-screenshots
           path: output/downloads/sn-*.png
           if-no-files-found: ignore
+
+      - name: 料率入力依頼を Chatwork に送信
+        run: node scripts/notify-input-request.mjs
+        env:
+          CHATWORK_TOKEN: ${{ secrets.CHATWORK_TOKEN }}
+          CHATWORK_ROOM_ID: ${{ secrets.CHATWORK_ROOM_ID }}
