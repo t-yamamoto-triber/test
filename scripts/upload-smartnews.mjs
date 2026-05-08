@@ -83,43 +83,26 @@ async function main() {
     console.log(`✅ レポートページ: ${page.url()}`);
     await page.screenshot({ path: path.join(downloadDir, 'sn-02-report-page.png') });
 
-    // ── 今月ボタンで日付設定 ──
-    console.log('📅 「今月」で期間設定...');
-    await page.waitForTimeout(1000);
+    // ページ読み込み完了を待つ
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: path.join(downloadDir, 'sn-03-loaded.png') });
 
-    // 「今月」ボタンをJS経由でクリック（オーバーレイ対応）
-    const monthResult = await page.evaluate(() => {
-      const candidates = Array.from(document.querySelectorAll('button, li, a, [role="option"]'));
-      const btn = candidates.find(el => /^今月$|^Today$|^This Month$/i.test(el.textContent.trim()));
+    // ── 「レポート」ボタンをクリック（テーブル右下の「↓ レポート」） ──
+    console.log('⬇️ レポートボタンをクリック...');
+    const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
+
+    // テキストに「レポート」を含むボタンをJS経由でクリック
+    const reportBtnResult = await page.evaluate(() => {
+      const candidates = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+      // 「レポート」テキストを持つボタン（「↓ レポート」等）
+      const btn = candidates.find(el => {
+        const text = el.textContent.trim();
+        return text === 'レポート' || text === '↓ レポート' || text.endsWith('レポート');
+      });
       if (btn) { btn.click(); return { clicked: true, text: btn.textContent.trim() }; }
       return { clicked: false };
     });
-    console.log('📅 今月ボタン:', JSON.stringify(monthResult));
-    await page.waitForTimeout(1000);
-    await page.screenshot({ path: path.join(downloadDir, 'sn-04-date-set.png') });
-
-    // ── 日別にチェック ──
-    console.log('📆 日別を選択...');
-    await page.evaluate(() => {
-      const candidates = Array.from(document.querySelectorAll('input[type="checkbox"], input[type="radio"], button, li, [role="option"]'));
-      const btn = candidates.find(el => /^日別$|^Daily$/i.test(el.textContent.trim() || el.value || el.labels?.[0]?.textContent.trim()));
-      if (btn) btn.click();
-    }).catch(() => {});
-    await page.waitForTimeout(500);
-
-    // ── CSVダウンロード ──
-    console.log('⬇️ CSVをダウンロード...');
-    await page.screenshot({ path: path.join(downloadDir, 'sn-05-before-download.png') });
-    const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
-
-    // ダウンロードボタンをJS経由でクリック
-    await page.evaluate(() => {
-      const candidates = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-      const btn = candidates.find(el => /ダウンロード|download|CSV|エクスポート|export/i.test(el.textContent.trim() + el.getAttribute('aria-label')));
-      if (btn) btn.click();
-    }).catch(() => {
-      page.locator('button').filter({ hasText: /ダウンロード|CSV|export/i }).first().click().catch(() => {});
-    });
+    console.log('📥 レポートボタン:', JSON.stringify(reportBtnResult));
 
     const download = await downloadPromise;
     const csvPath  = path.join(downloadDir, 'smartnews.csv');
