@@ -92,7 +92,7 @@ function httpsput(url, buffer) {
  */
 async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png') {
   const token   = process.env.SLACK_BOT_TOKEN;
-  const channel = process.env.SLACK_CHANNEL_ID;
+  const channel = (process.env.SLACK_CHANNEL_ID ?? '').trim();
   if (!token || !channel) {
     await sendSlack(messageText);
     return;
@@ -108,7 +108,7 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
     const body1 = await step1.json();
     if (!body1.ok) throw new Error(`getUploadURLExternal: ${body1.error}`);
     const { upload_url, file_id } = body1;
-    console.log('Slack Step1 完了 file_id:', file_id);
+    console.log('Slack Step1 完了 file_id:', file_id, 'channel:', channel, 'channel.length:', channel.length);
 
     // Step 2: バイナリを PUT（redirect:manual で 302 をそのまま受け取る）
     const step2res = await fetch(upload_url, {
