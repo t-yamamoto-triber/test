@@ -4,6 +4,7 @@
  * Slack     : SLACK_BOT_TOKEN + SLACK_CHANNEL_ID（テキスト・ファイル両対応）
  * 設定されているサービスにだけ送信する（未設定はスキップ）
  */
+import https from 'https';
 
 // ── Chatwork ──────────────────────────────────────────────────────────
 async function sendChatwork(text) {
@@ -67,36 +68,57 @@ async function sendSlack(text) {
 
 
 /**
- * 画像を一時ホストにアップロードして公開 URL を取得する（複数サービスにフォールバック）
+ * https.request で PUT/POST してレスポンス本文を返す
+ */
+function httpsRequest(options, body) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({ ...options, headers: { ...options.headers, 'Content-Length': body.length } }, res => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8').trim();
+        if (res.statusCode >= 400) reject(new Error(`HTTP ${res.statusCode}: ${text.substring(0, 100)}`));
+        else resolve(text);
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+/**
+ * 画像を一時ホストにアップロードして公開 URL を取得する（https モジュール使用）
  */
 async function uploadToPublicHost(fileBuffer, filename) {
-  // transfer.sh: PUT でシンプルアップロード
+  // transfer.sh: PUT
   const tryTransferSh = async () => {
-    const res = await fetch(`https://transfer.sh/${encodeURIComponent(filename)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'image/png', 'Content-Length': String(fileBuffer.length), 'Max-Days': '3' },
-      body: fileBuffer
-    });
-    if (!res.ok) throw new Error(`transfer.sh: ${res.status}`);
-    return (await res.text()).trim();
+    const url = await httpsRequest(
+      { hostname: 'transfer.sh', path: `/${encodeURIComponent(filename)}`, method: 'PUT',
+        headers: { 'Content-Type': 'image/png', 'Max-Days': '3' } },
+      fileBuffer
+    );
+    if (!url.startsWith('https://')) throw new Error(`invalid response: ${url.substring(0, 80)}`);
+    return url;
   };
 
-  // catbox.moe: multipart POST
+  // catbox.moe: multipart POST（userhash 空 = 匿名）
   const tryCatbox = async () => {
     const b = '----CB' + Math.random().toString(36).slice(2);
     const body = Buffer.concat([
-      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n--${b}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="${filename}"\r\nContent-Type: image/png\r\n\r\n`, 'utf8'),
+      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`, 'utf8'),
+      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="userhash"\r\n\r\n\r\n`, 'utf8'),
+      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="${filename}"\r\nContent-Type: image/png\r\n\r\n`, 'utf8'),
       fileBuffer,
       Buffer.from(`\r\n--${b}--\r\n`, 'utf8')
     ]);
-    const res = await fetch('https://catbox.moe/user/api.php', {
-      method: 'POST',
-      headers: { 'Content-Type': `multipart/form-data; boundary=${b}` },
+    const url = await httpsRequest(
+      { hostname: 'catbox.moe', path: '/user/api.php', method: 'POST',
+        headers: { 'Content-Type': `multipart/form-data; boundary=${b}` } },
       body
-    });
-    const text = (await res.text()).trim();
-    if (!text.startsWith('https://')) throw new Error(`catbox.moe: ${text}`);
-    return text;
+    );
+    if (!url.startsWith('https://')) throw new Error(`invalid response: ${url.substring(0, 80)}`);
+    return url;
   };
 
   // 0x0.st: multipart POST
@@ -107,13 +129,13 @@ async function uploadToPublicHost(fileBuffer, filename) {
       fileBuffer,
       Buffer.from(`\r\n--${b}--\r\n`, 'utf8')
     ]);
-    const res = await fetch('https://0x0.st', {
-      method: 'POST',
-      headers: { 'Content-Type': `multipart/form-data; boundary=${b}` },
+    const url = await httpsRequest(
+      { hostname: '0x0.st', path: '/', method: 'POST',
+        headers: { 'Content-Type': `multipart/form-data; boundary=${b}` } },
       body
-    });
-    if (!res.ok) throw new Error(`0x0.st: ${res.status}`);
-    return (await res.text()).trim();
+    );
+    if (!url.startsWith('https://')) throw new Error(`invalid response: ${url.substring(0, 80)}`);
+    return url;
   };
 
   for (const [name, fn] of [['transfer.sh', tryTransferSh], ['catbox.moe', tryCatbox], ['0x0.st', try0x0]]) {
