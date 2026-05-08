@@ -87,10 +87,11 @@ async function main() {
     await page.waitForTimeout(2000);
     await page.screenshot({ path: path.join(downloadDir, 'sn-03-loaded.png') });
 
-    // ── 「レポート」ボタンをクリック（テーブル右下の「↓ レポート」） ──
-    console.log('⬇️ レポートボタンをクリック...');
+    // ── ダウンロードイベントを先に登録（クリックより前に設定が必須） ──
+    const downloadPromise = page.waitForEvent('download', { timeout: 90000 });
 
-    // テキストに「レポート」を含むボタンをJS経由でクリック
+    // ── 「レポート」ボタンをクリック ──
+    console.log('⬇️ レポートボタンをクリック...');
     const reportBtnResult = await page.evaluate(() => {
       const candidates = Array.from(document.querySelectorAll('button, a, [role="button"]'));
       const btn = candidates.find(el => {
@@ -102,25 +103,21 @@ async function main() {
     });
     console.log('📥 レポートボタン:', JSON.stringify(reportBtnResult));
 
-    // クリック後の画面を確認（モーダルが出るか）
+    // モーダルが開くのを待つ
     await page.waitForTimeout(2000);
     await page.screenshot({ path: path.join(downloadDir, 'sn-04-after-report-click.png'), fullPage: true });
 
-    // モーダル内にダウンロードボタンがあればクリック
+    // モーダル内の「ダウンロード」ボタンをクリック
     const modalBtnResult = await page.evaluate(() => {
       const candidates = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-      const btn = candidates.find(el => {
-        const text = el.textContent.trim();
-        return /ダウンロード|download|CSV|エクスポート|export/i.test(text);
-      });
+      const btn = candidates.find(el => /ダウンロード|download/i.test(el.textContent.trim()));
       if (btn) { btn.click(); return { clicked: true, text: btn.textContent.trim() }; }
       return { clicked: false };
     });
     console.log('📥 モーダルボタン:', JSON.stringify(modalBtnResult));
+    console.log('⏳ ダウンロード待機中...');
     await page.waitForTimeout(1000);
     await page.screenshot({ path: path.join(downloadDir, 'sn-05-after-modal-click.png'), fullPage: true });
-
-    const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
 
     const download = await downloadPromise;
     const csvPath  = path.join(downloadDir, 'smartnews.csv');
