@@ -68,86 +68,54 @@ async function sendSlack(text) {
 
 
 /**
- * https.request で PUT/POST してレスポンス本文を返す
+ * GitHub Releases に画像をアップロードして公開 URL を返す
+ * GITHUB_TOKEN と GITHUB_REPOSITORY は GitHub Actions で自動設定される
  */
-function httpsRequest(options, body) {
-  return new Promise((resolve, reject) => {
-    const req = https.request({ ...options, headers: { ...options.headers, 'Content-Length': body.length } }, res => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => {
-        const text = Buffer.concat(chunks).toString('utf8').trim();
-        if (res.statusCode >= 400) reject(new Error(`HTTP ${res.statusCode}: ${text.substring(0, 100)}`));
-        else resolve(text);
-      });
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
-}
+async function uploadToGitHubRelease(fileBuffer, filename) {
+  const token = process.env.GITHUB_TOKEN;
+  const repo  = process.env.GITHUB_REPOSITORY; // "owner/repo"
+  if (!token || !repo) throw new Error('GITHUB_TOKEN / GITHUB_REPOSITORY が未設定');
 
-/**
- * 画像を一時ホストにアップロードして公開 URL を取得する（https モジュール使用）
- */
-async function uploadToPublicHost(fileBuffer, filename) {
-  // transfer.sh: PUT
-  const tryTransferSh = async () => {
-    const url = await httpsRequest(
-      { hostname: 'transfer.sh', path: `/${encodeURIComponent(filename)}`, method: 'PUT',
-        headers: { 'Content-Type': 'image/png', 'Max-Days': '3' } },
-      fileBuffer
-    );
-    if (!url.startsWith('https://')) throw new Error(`invalid response: ${url.substring(0, 80)}`);
-    return url;
-  };
+  const apiBase = `https://api.github.com/repos/${repo}`;
+  const headers = { Authorization: `Bearer ${token}`, 'User-Agent': 'ad-report-bot', Accept: 'application/vnd.github+json' };
+  const tagName = 'ad-report-screenshots';
 
-  // catbox.moe: multipart POST（userhash 空 = 匿名）
-  const tryCatbox = async () => {
-    const b = '----CB' + Math.random().toString(36).slice(2);
-    const body = Buffer.concat([
-      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`, 'utf8'),
-      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="userhash"\r\n\r\n\r\n`, 'utf8'),
-      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="${filename}"\r\nContent-Type: image/png\r\n\r\n`, 'utf8'),
-      fileBuffer,
-      Buffer.from(`\r\n--${b}--\r\n`, 'utf8')
-    ]);
-    const url = await httpsRequest(
-      { hostname: 'catbox.moe', path: '/user/api.php', method: 'POST',
-        headers: { 'Content-Type': `multipart/form-data; boundary=${b}` } },
-      body
-    );
-    if (!url.startsWith('https://')) throw new Error(`invalid response: ${url.substring(0, 80)}`);
-    return url;
-  };
-
-  // 0x0.st: multipart POST
-  const try0x0 = async () => {
-    const b = '----ZX' + Math.random().toString(36).slice(2);
-    const body = Buffer.concat([
-      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: image/png\r\n\r\n`, 'utf8'),
-      fileBuffer,
-      Buffer.from(`\r\n--${b}--\r\n`, 'utf8')
-    ]);
-    const url = await httpsRequest(
-      { hostname: '0x0.st', path: '/', method: 'POST',
-        headers: { 'Content-Type': `multipart/form-data; boundary=${b}` } },
-      body
-    );
-    if (!url.startsWith('https://')) throw new Error(`invalid response: ${url.substring(0, 80)}`);
-    return url;
-  };
-
-  for (const [name, fn] of [['transfer.sh', tryTransferSh], ['catbox.moe', tryCatbox], ['0x0.st', try0x0]]) {
-    try {
-      const url = await fn();
-      console.log(`Slack: 公開URL取得 (${name}):`, url);
-      return url;
-    } catch (e) {
-      console.warn(`Slack: ${name} 失敗 -`, e.message);
+  // タグが存在するか確認（なければ作成）
+  let releaseId;
+  const getRes = await fetch(`${apiBase}/releases/tags/${tagName}`, { headers });
+  if (getRes.ok) {
+    const release = await getRes.json();
+    releaseId = release.id;
+    // 同名の既存アセットを削除
+    for (const asset of (release.assets ?? [])) {
+      if (asset.name === filename) {
+        await fetch(`${apiBase}/releases/assets/${asset.id}`, { method: 'DELETE', headers });
+      }
     }
+  } else {
+    // Release を新規作成
+    const createRes = await fetch(`${apiBase}/releases`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag_name: tagName, name: 'Ad Report Screenshots', prerelease: true })
+    });
+    if (!createRes.ok) {
+      const err = await createRes.json();
+      throw new Error(`release作成失敗: ${err.message}`);
+    }
+    releaseId = (await createRes.json()).id;
   }
-  throw new Error('全ての一時ホストが失敗しました');
+
+  // アセットをアップロード
+  const uploadRes = await fetch(
+    `https://uploads.github.com/repos/${repo}/releases/${releaseId}/assets?name=${encodeURIComponent(filename)}`,
+    { method: 'POST', headers: { ...headers, 'Content-Type': 'image/png', 'Content-Length': String(fileBuffer.length) }, body: fileBuffer }
+  );
+  if (!uploadRes.ok) {
+    const err = await uploadRes.json().catch(() => ({}));
+    throw new Error(`asset upload失敗: ${err.message ?? uploadRes.status}`);
+  }
+  const asset = await uploadRes.json();
+  return asset.browser_download_url;
 }
 
 /**
@@ -163,9 +131,9 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
   }
 
   try {
-    // 外部ホストに一時アップロードして公開 URL を取得
-    console.log('Slack: 画像を一時ホストにアップロード中...');
-    const imageUrl = await uploadToPublicHost(fileBuffer, filename);
+    // GitHub Releases に一時アップロードして公開 URL を取得
+    console.log('Slack: GitHub Releases に画像アップロード中...');
+    const imageUrl = await uploadToGitHubRelease(fileBuffer, filename);
     console.log('Slack: 公開URL取得:', imageUrl);
 
     // image ブロックで投稿
