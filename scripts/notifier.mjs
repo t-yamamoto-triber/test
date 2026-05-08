@@ -4,6 +4,7 @@
  * Slack     : SLACK_BOT_TOKEN + SLACK_CHANNEL_ID（テキスト・ファイル両対応）
  * 設定されているサービスにだけ送信する（未設定はスキップ）
  */
+import https from 'https';
 
 // ── Chatwork ──────────────────────────────────────────────────────────
 async function sendChatwork(text) {
@@ -97,14 +98,19 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
     if (!body1.ok) throw new Error(`getUploadURLExternal: ${body1.error}`);
     const { upload_url, file_id } = body1;
 
-    // Step 2: 取得した URL にバイナリを PUT
+    // Step 2: 取得した URL にバイナリを PUT（https モジュール使用）
     console.log('Slack Step2: PUT to upload_url');
-    const step2 = await fetch(upload_url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: fileBuffer
+    await new Promise((resolve, reject) => {
+      const parsed = new URL(upload_url);
+      const req = https.request(
+        { hostname: parsed.hostname, path: parsed.pathname + parsed.search, method: 'PUT',
+          headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': fileBuffer.length } },
+        res => { console.log('Slack Step2 status:', res.statusCode); res.resume(); resolve(); }
+      );
+      req.on('error', reject);
+      req.write(fileBuffer);
+      req.end();
     });
-    console.log('Slack Step2 status:', step2.status);
 
     // Step 3: アップロード完了 & チャンネルに投稿
     console.log('Slack Step3: completeUploadExternal');
@@ -127,6 +133,7 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
     console.log('✅ Slack ファイル送信完了');
   } catch (e) {
     console.error('Slack ファイル送信エラー:', e.message);
+    if (e.cause) console.error('  cause:', e.cause);
   }
 }
 
