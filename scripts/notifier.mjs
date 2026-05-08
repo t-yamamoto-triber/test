@@ -66,32 +66,23 @@ async function sendSlack(text) {
   }).catch(e => console.error('Slack送信エラー:', e.message));
 }
 
-// https モジュールで PUT（リダイレクトを再帰的にフォロー）
+// https モジュールで PUT（3xx はアップロード成功の合図なのでフォローしない）
 function httpsput(url, buffer) {
   return new Promise((resolve, reject) => {
-    const doReq = (target) => {
-      const parsed = new URL(target);
-      const req = https.request({
-        hostname: parsed.hostname,
-        path: parsed.pathname + parsed.search,
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': buffer.length }
-      }, res => {
-        const { statusCode, headers } = res;
-        res.resume();
-        if ((statusCode === 301 || statusCode === 302 || statusCode === 307 || statusCode === 308) && headers.location) {
-          console.log(`Slack Step2 redirect(${statusCode}) →`, headers.location);
-          doReq(headers.location);
-        } else {
-          console.log('Slack Step2 status:', statusCode);
-          resolve(statusCode);
-        }
-      });
-      req.on('error', reject);
-      req.write(buffer);
-      req.end();
-    };
-    doReq(url);
+    const parsed = new URL(url);
+    const req = https.request({
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': buffer.length }
+    }, res => {
+      console.log('Slack Step2 status:', res.statusCode);
+      res.resume();
+      resolve(res.statusCode);
+    });
+    req.on('error', reject);
+    req.write(buffer);
+    req.end();
   });
 }
 
