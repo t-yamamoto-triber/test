@@ -79,7 +79,8 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
   }
 
   try {
-    // Step 1: アップロード URL を取得（form-encoded で送信）
+    // Step 1: アップロード URL を取得
+    console.log('Slack Step1: getUploadURLExternal 開始 (length:', fileBuffer.length, ')');
     const step1 = await fetch('https://slack.com/api/files.getUploadURLExternal', {
       method: 'POST',
       headers: {
@@ -91,17 +92,22 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
         length: String(fileBuffer.length)
       }).toString()
     });
-    const { ok: ok1, upload_url, file_id, error: e1 } = await step1.json();
-    if (!ok1) throw new Error(`getUploadURLExternal: ${e1}`);
+    const body1 = await step1.json();
+    console.log('Slack Step1 レスポンス:', JSON.stringify(body1));
+    if (!body1.ok) throw new Error(`getUploadURLExternal: ${body1.error}`);
+    const { upload_url, file_id } = body1;
 
     // Step 2: 取得した URL にバイナリを PUT
-    await fetch(upload_url, {
+    console.log('Slack Step2: PUT to upload_url');
+    const step2 = await fetch(upload_url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/octet-stream' },
       body: fileBuffer
     });
+    console.log('Slack Step2 status:', step2.status);
 
     // Step 3: アップロード完了 & チャンネルに投稿
+    console.log('Slack Step3: completeUploadExternal');
     const step3 = await fetch('https://slack.com/api/files.completeUploadExternal', {
       method: 'POST',
       headers: {
@@ -114,8 +120,9 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
         initial_comment: toSlackText(messageText)
       })
     });
-    const { ok: ok3, error: e3 } = await step3.json();
-    if (!ok3) throw new Error(`completeUploadExternal: ${e3}`);
+    const body3 = await step3.json();
+    console.log('Slack Step3 レスポンス:', JSON.stringify(body3));
+    if (!body3.ok) throw new Error(`completeUploadExternal: ${body3.error}`);
 
     console.log('✅ Slack ファイル送信完了');
   } catch (e) {
