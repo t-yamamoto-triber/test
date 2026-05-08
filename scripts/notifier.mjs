@@ -67,7 +67,7 @@ async function sendSlack(text) {
 }
 
 /**
- * Slack にファイルをアップロードして投稿する（files.upload 方式）
+ * Slack にファイルをアップロードして投稿する（新 3ステップ API）
  * 必要な env: SLACK_BOT_TOKEN, SLACK_CHANNEL_ID
  */
 async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png') {
@@ -79,28 +79,43 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
   }
 
   try {
-    const boundary = '----SlackBoundary' + Math.random().toString(36).slice(2);
-    const body = Buffer.concat([
-      Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="channels"\r\n\r\n${channel}\r\n` +
-        `--${boundary}\r\nContent-Disposition: form-data; name="initial_comment"\r\n\r\n${toSlackText(messageText)}\r\n` +
-        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: image/png\r\n\r\n`,
-        'utf8'
-      ),
-      fileBuffer,
-      Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8')
-    ]);
-
-    const res = await fetch('https://slack.com/api/files.upload', {
+    // Step 1: アップロード URL を取得（form-encoded で送信）
+    const step1 = await fetch('https://slack.com/api/files.getUploadURLExternal', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
-        'Content-Type': `multipart/form-data; boundary=${boundary}`
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body
+      body: new URLSearchParams({
+        filename,
+        length: String(fileBuffer.length)
+      }).toString()
     });
-    const json = await res.json();
-    if (!json.ok) throw new Error(json.error);
+    const { ok: ok1, upload_url, file_id, error: e1 } = await step1.json();
+    if (!ok1) throw new Error(`getUploadURLExternal: ${e1}`);
+
+    // Step 2: 取得した URL にバイナリを PUT
+    await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: fileBuffer
+    });
+
+    // Step 3: アップロード完了 & チャンネルに投稿
+    const step3 = await fetch('https://slack.com/api/files.completeUploadExternal', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        files: [{ id: file_id }],
+        channel_id: channel,
+        initial_comment: toSlackText(messageText)
+      })
+    });
+    const { ok: ok3, error: e3 } = await step3.json();
+    if (!ok3) throw new Error(`completeUploadExternal: ${e3}`);
 
     console.log('✅ Slack ファイル送信完了');
   } catch (e) {
