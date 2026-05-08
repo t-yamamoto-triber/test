@@ -67,26 +67,65 @@ async function sendSlack(text) {
 
 
 /**
- * 画像を 0x0.st に一時アップロードして公開 URL を取得する
+ * 画像を一時ホストにアップロードして公開 URL を取得する（複数サービスにフォールバック）
  */
 async function uploadToPublicHost(fileBuffer, filename) {
-  const boundary = '----Boundary' + Math.random().toString(36).slice(2);
-  const body = Buffer.concat([
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: image/png\r\n\r\n`,
-      'utf8'
-    ),
-    fileBuffer,
-    Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8')
-  ]);
+  // transfer.sh: PUT でシンプルアップロード
+  const tryTransferSh = async () => {
+    const res = await fetch(`https://transfer.sh/${encodeURIComponent(filename)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/png', 'Content-Length': String(fileBuffer.length), 'Max-Days': '3' },
+      body: fileBuffer
+    });
+    if (!res.ok) throw new Error(`transfer.sh: ${res.status}`);
+    return (await res.text()).trim();
+  };
 
-  const res = await fetch('https://0x0.st', {
-    method: 'POST',
-    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
-    body
-  });
-  if (!res.ok) throw new Error(`0x0.st upload failed: ${res.status}`);
-  return (await res.text()).trim();
+  // catbox.moe: multipart POST
+  const tryCatbox = async () => {
+    const b = '----CB' + Math.random().toString(36).slice(2);
+    const body = Buffer.concat([
+      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n--${b}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="${filename}"\r\nContent-Type: image/png\r\n\r\n`, 'utf8'),
+      fileBuffer,
+      Buffer.from(`\r\n--${b}--\r\n`, 'utf8')
+    ]);
+    const res = await fetch('https://catbox.moe/user/api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/form-data; boundary=${b}` },
+      body
+    });
+    const text = (await res.text()).trim();
+    if (!text.startsWith('https://')) throw new Error(`catbox.moe: ${text}`);
+    return text;
+  };
+
+  // 0x0.st: multipart POST
+  const try0x0 = async () => {
+    const b = '----ZX' + Math.random().toString(36).slice(2);
+    const body = Buffer.concat([
+      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: image/png\r\n\r\n`, 'utf8'),
+      fileBuffer,
+      Buffer.from(`\r\n--${b}--\r\n`, 'utf8')
+    ]);
+    const res = await fetch('https://0x0.st', {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/form-data; boundary=${b}` },
+      body
+    });
+    if (!res.ok) throw new Error(`0x0.st: ${res.status}`);
+    return (await res.text()).trim();
+  };
+
+  for (const [name, fn] of [['transfer.sh', tryTransferSh], ['catbox.moe', tryCatbox], ['0x0.st', try0x0]]) {
+    try {
+      const url = await fn();
+      console.log(`Slack: 公開URL取得 (${name}):`, url);
+      return url;
+    } catch (e) {
+      console.warn(`Slack: ${name} 失敗 -`, e.message);
+    }
+  }
+  throw new Error('全ての一時ホストが失敗しました');
 }
 
 /**
