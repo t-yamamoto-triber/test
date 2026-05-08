@@ -49,11 +49,11 @@ async function takeScreenshot() {
   await browser.close();
 }
 
-// JST で「前日」の日付文字列を返す
+// JST で「前日」の日付文字列を返す（年なし）
 function getYesterdayJST() {
   const now  = new Date(Date.now() + 9 * 3600 * 1000);
   const yest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
-  return `${yest.getUTCFullYear()}年${yest.getUTCMonth() + 1}月${yest.getUTCDate()}日`;
+  return `${yest.getUTCMonth() + 1}月${yest.getUTCDate()}日`;
 }
 
 async function postToAll() {
@@ -67,7 +67,7 @@ async function postToAll() {
   const reportMessage = `[info][title]📊 ${dateStr}迄の広告レポート[/title]スマートニュース 前日データ（料率確定後）[/info]`;
 
   // Slack: 完了 + レポート + 画像を1通にまとめる
-  const slackCombined = `✅ ${dateStr}迄の集計が完了しました。\n*📊 ${dateStr}迄の広告レポート*\nスマートニュース 前日データ（料率確定後）`;
+  const slackCombined = `✅${dateStr}迄の集計が完了しました。\n📊${dateStr}迄の広告レポートを送ります。\n\u3000スマートニュース ${dateStr}迄のデータ`;
 
   console.log('📤 レポートを送信中...');
   await notifyWithFile(reportMessage, fileData, 'ad-report.png', { slackText: slackCombined });

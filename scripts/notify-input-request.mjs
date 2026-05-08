@@ -9,7 +9,7 @@ const INPUT_URL = 'https://ad-report-design.surge.sh/input.html';
 function getYesterdayJST() {
   const now  = new Date(Date.now() + 9 * 3600 * 1000);
   const yest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
-  return `${yest.getUTCFullYear()}年${yest.getUTCMonth() + 1}月${yest.getUTCDate()}日`;
+  return `${yest.getUTCMonth() + 1}月${yest.getUTCDate()}日`;
 }
 
 const dateStr = getYesterdayJST();
