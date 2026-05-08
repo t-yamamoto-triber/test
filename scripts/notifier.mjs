@@ -74,7 +74,7 @@ function httpsput(url, buffer) {
       hostname: parsed.hostname,
       path: parsed.pathname + parsed.search,
       method: 'PUT',
-      headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': buffer.length }
+      headers: { 'Content-Type': 'image/png', 'Content-Length': buffer.length }
     }, res => {
       console.log('Slack Step2 status:', res.statusCode);
       res.resume();
@@ -99,11 +99,11 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
   }
 
   try {
-    // Step 1: アップロード URL を取得
+    // Step 1: アップロード URL を取得（content_type を明示）
     const step1 = await fetch('https://slack.com/api/files.getUploadURLExternal', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ filename, length: String(fileBuffer.length) }).toString()
+      body: new URLSearchParams({ filename, length: String(fileBuffer.length), content_type: 'image/png' }).toString()
     });
     const body1 = await step1.json();
     if (!body1.ok) throw new Error(`getUploadURLExternal: ${body1.error}`);
@@ -136,9 +136,22 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
     });
     const body3 = await step3.json();
     const uploadedSize = body3.files?.[0]?.size ?? 'unknown';
+    const uploadedMime = body3.files?.[0]?.mimetype ?? 'unknown';
     const sharedChannels = body3.files?.[0]?.channels ?? [];
-    console.log(`Slack Step3: ok=${body3.ok} size=${uploadedSize} channels=${JSON.stringify(sharedChannels)} error=${body3.error ?? ''}`);
+    console.log(`Slack Step3: ok=${body3.ok} size=${uploadedSize} mime=${uploadedMime} channels=${JSON.stringify(sharedChannels)}`);
     if (!body3.ok) throw new Error(`completeUploadExternal: ${body3.error}`);
+
+    // channels=[] の場合は chat.postMessage + file_ids でバックアップ投稿
+    if (sharedChannels.length === 0) {
+      const file_id = body1.file_id;
+      const step4 = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, text: toSlackText(messageText), file_ids: [file_id] })
+      });
+      const body4 = await step4.json();
+      console.log(`Slack Step4(fallback): ok=${body4.ok} error=${body4.error ?? ''}`);
+    }
     console.log('✅ Slack ファイル送信完了');
   } catch (e) {
     console.error('Slack ファイル送信エラー:', e.message);
