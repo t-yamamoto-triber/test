@@ -110,10 +110,21 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
     const { upload_url, file_id } = body1;
     console.log('Slack Step1 完了 file_id:', file_id);
 
-    // Step 2: バイナリを PUT（リダイレクトをフォロー）
-    await httpsput(upload_url, fileBuffer);
+    // Step 2: バイナリを PUT（redirect:manual で 302 をそのまま受け取る）
+    const step2res = await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: new Uint8Array(fileBuffer),
+      redirect: 'manual'
+    }).catch(async () => {
+      // fetch が失敗した場合は https モジュールで再試行
+      console.log('fetch PUT failed, fallback to https module');
+      await httpsput(upload_url, fileBuffer);
+      return { status: 302 };
+    });
+    console.log('Slack Step2 status:', step2res.status);
 
-    // Step 3: アップロード完了（channel_id なし）
+    // Step 3: アップロード完了
     const step3 = await fetch('https://slack.com/api/files.completeUploadExternal', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -121,7 +132,8 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
     });
     const body3 = await step3.json();
     if (!body3.ok) throw new Error(`completeUploadExternal: ${body3.error}`);
-    console.log('Slack Step3 完了');
+    const uploadedSize = body3.files?.[0]?.size ?? 'unknown';
+    console.log(`Slack Step3 完了 size:${uploadedSize}`);
 
     // Step 4: chat.postMessage で file_ids 指定して投稿
     const step4 = await fetch('https://slack.com/api/chat.postMessage', {
@@ -134,6 +146,7 @@ async function sendSlackFile(messageText, fileBuffer, filename = 'ad-report.png'
       })
     });
     const body4 = await step4.json();
+    console.log('Slack Step4:', body4.ok, body4.error ?? '');
     if (!body4.ok) throw new Error(`chat.postMessage: ${body4.error}`);
     console.log('✅ Slack ファイル送信完了');
   } catch (e) {
