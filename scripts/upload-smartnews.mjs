@@ -73,49 +73,15 @@ async function main() {
     }
     console.log(`✅ ログイン済み: ${page.url()}`);
 
-    // URLからビジネスIDを抽出
-    const bizIdMatch = page.url().match(/businesses\/(\d+)/);
-    const bizId = bizIdMatch ? bizIdMatch[1] : null;
-    console.log(`🏢 ビジネスID: ${bizId}`);
-
     // スクリーンショット（ログイン後）
     await page.screenshot({ path: path.join(downloadDir, 'sn-01-after-login.png') });
 
-    // ── レポートページへ移動（ビジネストップから探す） ──
-    console.log('📊 レポートページに移動...');
-    // ビジネストップページに移動してナビゲーションを確認
-    if (bizId) {
-      await page.goto(`https://ads.smartnews.com/bm/businesses/${bizId}`, {
-        waitUntil: 'networkidle', timeout: 30000
-      }).catch(() => {});
-    }
-    console.log(`📍 現在のURL: ${page.url()}`);
-    await page.screenshot({ path: path.join(downloadDir, 'sn-02-biz-top.png') });
-
-    // ページ内のリンク一覧をログ出力（レポートURLを特定するため）
-    const links = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('a[href]'))
-        .map(a => ({ text: a.textContent.trim().slice(0, 30), href: a.href }))
-        .filter(l => l.href.includes('smartnews'))
-        .slice(0, 20)
-    );
-    console.log('🔗 ページ内リンク:', JSON.stringify(links));
-
-    // 「レポート」リンクをクリック（ナビゲーションから）
-    const reportLink = page.locator('a, button, [role="tab"]').filter({ hasText: /^レポート$|^Report$/ });
-    if (await reportLink.count() > 0) {
-      await reportLink.first().click();
-      await page.waitForLoadState('networkidle');
-      console.log(`✅ レポートページ: ${page.url()}`);
-    } else {
-      // ナビゲーションで見つからない場合、広告アカウントへ直接移動を試みる
-      console.log('⚠ レポートリンクが見つからない。広告アカウントページを試みる...');
-      await page.goto('https://ads.smartnews.com/bm/ad_accounts', {
-        waitUntil: 'networkidle', timeout: 30000
-      }).catch(() => {});
-      console.log(`📍 広告アカウントURL: ${page.url()}`);
-    }
-    await page.screenshot({ path: path.join(downloadDir, 'sn-03-report-page.png') });
+    // ── レポートページへ直接移動 ──
+    const REPORT_URL = 'https://ads.smartnews.com/am/ad_accounts/102459875/campaigns?report=standard';
+    console.log(`📊 レポートページに移動: ${REPORT_URL}`);
+    await page.goto(REPORT_URL, { waitUntil: 'networkidle', timeout: 30000 });
+    console.log(`✅ レポートページ: ${page.url()}`);
+    await page.screenshot({ path: path.join(downloadDir, 'sn-02-report-page.png') });
 
     // ── 今月ボタンで日付設定 ──
     console.log('📅 「今月」で期間設定...');
