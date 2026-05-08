@@ -59,8 +59,8 @@ function getYesterdayJST() {
 async function postToAll() {
   const dateStr = getYesterdayJST();
 
-  // ④ 料率入力完了メッセージ（Chatwork + Slack 両方）
-  await notify(`✅ ${dateStr} 分の料率入力が完了しました。`);
+  // ④ 集計完了メッセージ（Chatwork + Slack 両方）
+  await notify(`✅ ${dateStr}迄の集計が完了しました。`);
   console.log('✅ 完了メッセージ送信');
 
   // ⑤ スクリーンショット付きレポート
