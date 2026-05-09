@@ -227,12 +227,10 @@ async function main() {
 
   if (sn && sn.cells?.length > 0) {
     msg += `【スマートニュース】\n`;
-    // cells の中から金額・件数・%を推測して表示
     const spendCells = sn.cells.filter(c => /^[¥\d,]+$/.test(c.replace(/\s/g, '')) && parseInt(c.replace(/[¥,]/g, '')) > 10000);
     const cvCells    = sn.cells.filter(c => /^\d+$/.test(c) && parseInt(c) < 1000);
     msg += spendCells[0] ? `　広告費：${spendCells[0]}\n` : `　広告費：取得中\n`;
-    msg += cvCells[0]    ? `　計測CV：${cvCells[0]}件\n`  : `　計測CV：取得中\n`;
-    // CPA = 広告費 / CV
+    msg += cvCells[0]    ? `　媒体CV：${cvCells[0]}件\n`  : `　媒体CV：取得中\n`;
     const spend = parseInt((spendCells[0] || '').replace(/[¥,]/g, ''));
     const cv    = parseInt(cvCells[0] || '0');
     if (spend > 0 && cv > 0) {
@@ -248,12 +246,15 @@ async function main() {
     msg += `【AFAD（実計測CV）】\n`;
     const cvCells    = afad.cells.filter(c => /^\d+$/.test(c) && parseInt(c) < 500);
     const spendCells = afad.cells.filter(c => /^[\d,]+$/.test(c) && parseInt(c.replace(/,/g, '')) > 10000);
-    msg += cvCells[0]    ? `　獲得CV：${cvCells[0]}件\n`    : `　獲得CV：取得中\n`;
-    msg += spendCells[0] ? `　広告費：¥${spendCells[0]}\n` : ``;
+    msg += cvCells[0]    ? `　計測CV：${cvCells[0]}件\n` : `　計測CV：取得中\n`;
     const cv    = parseInt(cvCells[0] || '0');
     const spend = parseInt((spendCells[0] || '').replace(/,/g, ''));
     if (spend > 0 && cv > 0) {
       msg += `　CPA：${yen(spend / cv)}\n`;
+    } else if (cv > 0 && sn?.cells?.length > 0) {
+      // AFADにはCPAの分母となる広告費がないため、SNの広告費で代替計算
+      const snSpend = parseInt((sn.cells.find(c => parseInt(c.replace(/[¥,]/g, '')) > 10000) || '').replace(/[¥,]/g, ''));
+      if (snSpend > 0) msg += `　CPA：${yen(snSpend / cv)}\n`;
     }
   } else {
     msg += `【AFAD（実計測CV）】\n　データ取得できませんでした\n`;
