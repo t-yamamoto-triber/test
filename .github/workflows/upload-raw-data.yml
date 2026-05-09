@@ -2,7 +2,7 @@ name: rawデータ自動更新（AFAD + スマートニュース）
 
 on:
   schedule:
-    - cron: '0 13 * * *'  # 毎日 22:00 JST（UTC 13:00）※遅延考慮で深夜0〜2時に完了
+    - cron: '0 23 * * *'  # 毎日 8:00 AM JST（UTC 23:00）
   workflow_dispatch:
 
 jobs:
