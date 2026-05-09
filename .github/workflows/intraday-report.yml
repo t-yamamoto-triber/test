@@ -1,0 +1,53 @@
+name: 当日速報レポート（6回/日）
+
+on:
+  schedule:
+    - cron: '0 0 * * *'    # JST 09:00
+    - cron: '0 3 * * *'    # JST 12:00
+    - cron: '0 6 * * *'    # JST 15:00
+    - cron: '0 9 * * *'    # JST 18:00
+    - cron: '0 12 * * *'   # JST 21:00
+    - cron: '59 14 * * *'  # JST 23:59
+  workflow_dispatch:
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install
+
+      - name: Playwright ブラウザキャッシュ
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package.json') }}
+
+      - run: npx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      - run: npx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - name: 当日速報レポートを Slack に送信
+        run: node scripts/intraday-report.mjs
+        env:
+          AFAD_ID: ${{ secrets.AFAD_ID }}
+          AFAD_PASSWORD: ${{ secrets.AFAD_PASSWORD }}
+          SN_AUTH_STATE: ${{ secrets.SN_AUTH_STATE }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+
+      - name: デバッグ用スクリーンショット保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intraday-debug-${{ github.run_id }}
+          path: output/downloads/intraday-*.png
+          if-no-files-found: ignore
