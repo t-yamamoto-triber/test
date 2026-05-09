@@ -84,8 +84,44 @@ async function main() {
     await page.screenshot({ path: path.join(downloadDir, 'sn-02-report-page.png') });
 
     // ページ読み込み完了を待つ
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
     await page.screenshot({ path: path.join(downloadDir, 'sn-03-loaded.png') });
+
+    // ── 日付ピッカーで「今月1日〜昨日」を設定 ──
+    console.log(`📅 日付を設定: ${start} 〜 ${end}`);
+    const dateSetResult = await page.evaluate(({ start, end }) => {
+      // 日付入力欄を探す（テキスト入力 or date型）
+      const inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="date"], input[placeholder*="date"], input[placeholder*="Date"]'));
+      // 開始・終了日入力欄を特定（2つ並んでいることが多い）
+      if (inputs.length >= 2) {
+        const startInput = inputs[0];
+        const endInput   = inputs[1];
+        // React管理フィールドへの値セット
+        const setVal = (el, val) => {
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          nativeInputValueSetter.call(el, val);
+          el.dispatchEvent(new Event('input',  { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        setVal(startInput, start);
+        setVal(endInput,   end);
+        return { ok: true, method: 'input', count: inputs.length };
+      }
+      return { ok: false, inputCount: inputs.length };
+    }, { start, end });
+    console.log('📅 日付入力結果:', JSON.stringify(dateSetResult));
+
+    // 日付確定ボタン（適用 / Apply / 検索 等）をクリック
+    const applyResult = await page.evaluate(() => {
+      const btn = Array.from(document.querySelectorAll('button')).find(el =>
+        /適用|apply|確定|search|検索/i.test(el.textContent.trim())
+      );
+      if (btn) { btn.click(); return { clicked: true, text: btn.textContent.trim() }; }
+      return { clicked: false };
+    });
+    console.log('✅ 日付確定ボタン:', JSON.stringify(applyResult));
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: path.join(downloadDir, 'sn-03b-after-date-set.png') });
 
     // ── ダウンロードイベントを先に登録（クリックより前に設定が必須） ──
     const downloadPromise = page.waitForEvent('download', { timeout: 90000 });
