@@ -35,9 +35,13 @@ jobs:
       - run: npx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
 
+      - name: トリガー種別を表示（schedule / workflow_dispatch）
+        run: echo "GITHUB_EVENT_NAME=${{ github.event_name }}"
+
       - name: 当日速報レポートを Slack に送信
         run: node scripts/intraday-report.mjs
         env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
           AFAD_ID: ${{ secrets.AFAD_ID }}
           AFAD_PASSWORD: ${{ secrets.AFAD_PASSWORD }}
           SN_AUTH_STATE: ${{ secrets.SN_AUTH_STATE }}

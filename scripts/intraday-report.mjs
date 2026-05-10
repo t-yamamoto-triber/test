@@ -16,6 +16,7 @@ const AFAD_PASSWORD  = process.env.AFAD_PASSWORD;
 const SN_AUTH_STATE  = process.env.SN_AUTH_STATE;
 const SLACK_TOKEN    = process.env.SLACK_BOT_TOKEN;
 const SLACK_CHANNEL  = process.env.SLACK_CHANNEL_ID;
+const GITHUB_EVENT   = process.env.GITHUB_EVENT_NAME || '';
 
 // JST 現在日時
 function nowJST() {
@@ -124,9 +125,19 @@ async function fetchSmartNews(downloadDir) {
   }
 }
 
-// ── AFAD: 当日サマリーを取得 ──
+// upload-afad.mjs と同じ導線で期間別・日別まで進み、「今月」集計結果のテーブルから当日行だけ拾う
 async function fetchAFAD(downloadDir) {
   if (!AFAD_ID || !AFAD_PASSWORD) return null;
+
+  const { date: todayIso } = nowJST();
+  const [y, mo, da] = todayIso.split('-');
+  const todayVariants = [
+    todayIso,
+    `${y}/${mo}/${da}`,
+    `${y}/${Number(mo)}/${Number(da)}`,
+    `${Number(mo)}/${Number(da)}`,
+    `${mo}/${da}`
+  ];
 
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   try {
@@ -136,67 +147,85 @@ async function fetchAFAD(downloadDir) {
     });
     const page = await context.newPage();
 
+    console.log('🌐 AFAD にアクセス中...');
     await page.goto('https://afad.birdmotion.net/admin', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(500);
+
+    await page.getByText('レポート集計').first().click().catch(async () => {
+      await page.locator('a, li, span').filter({ hasText: 'レポート集計' }).first().click();
+    });
+    await page.waitForTimeout(500);
+
+    await page.getByText('期間別').first().click().catch(async () => {
+      await page.locator('a, li, span').filter({ hasText: '期間別' }).first().click();
+    });
+    await page.waitForLoadState('networkidle');
+
+    console.log('🔍 絞り込み検索を開く...');
+    await page.getByText('絞り込み検索').first().click();
+    await page.waitForTimeout(800);
+
+    const dailyLabel = page.locator('label').filter({ hasText: /^日別$/ });
+    if (await dailyLabel.count() > 0) {
+      await dailyLabel.first().click();
+    } else {
+      await page.getByText('日別').first().click();
+    }
+    await page.waitForTimeout(500);
+
+    await page.locator('#searchReportAt').click();
+    await page.waitForTimeout(1000);
+
+    await page.evaluate(() => {
+      const btn = document.getElementById('current_month')
+        || Array.from(document.querySelectorAll('button, li, a'))
+          .find(el => el.textContent.trim() === '今月');
+      if (btn) btn.click();
+    });
+    await page.waitForTimeout(500);
+
+    await page.evaluate(() => {
+      const applyBtn = Array.from(document.querySelectorAll('button'))
+        .find(el => /適用|Apply|確定/.test(el.textContent.trim()));
+      if (applyBtn) applyBtn.click();
+    }).catch(() => {});
+    await page.waitForTimeout(500);
+
+    const advertiserSelect = page.locator('select').filter({ has: page.locator('option').filter({ hasText: 'ミルクG' }) });
+    if (await advertiserSelect.count() > 0) {
+      await advertiserSelect.selectOption({ label: 'ミルクG' });
+    } else {
+      await page.locator('input[name*="advertiser"], input[id*="advertiser"], input[placeholder*="広告主"]').first().fill('ミルクG').catch(() => {});
+    }
+
+    await page.locator('.datepicker').first().evaluate(el => { el.style.display = 'none'; }).catch(() => {});
+    const searchBtn = page.locator('button[type="submit"]').filter({ hasText: '検索' })
+      .or(page.locator('input[type="submit"][value="検索"]'))
+      .or(page.locator('button').filter({ hasText: /^検索$/ }))
+      .last();
+    await searchBtn.click({ force: true });
+    await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
 
-    // 期間レポートへ
-    const periodLink = page.locator('a, button').filter({ hasText: /期間別|期間レポート/ }).first();
-    if (await periodLink.count() > 0) {
-      await periodLink.click();
-      await page.waitForTimeout(2000);
-    }
+    await page.screenshot({ path: path.join(downloadDir, `intraday-afad-${todayIso}.png`), fullPage: true });
 
-    // 「絞り込み検索」クリック
-    const filterBtn = page.locator('button, a').filter({ hasText: /絞り込み/ }).first();
-    if (await filterBtn.count() > 0) {
-      await filterBtn.click();
-      await page.waitForTimeout(1000);
-    }
+    const rowData = await page.evaluate((variants) => {
+      const rows = Array.from(document.querySelectorAll('table tbody tr, tr'));
+      for (const tr of rows) {
+        const tds = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim());
+        if (tds.length === 0) continue;
+        const first = tds[0];
+        if (variants.some(v => first.includes(v) || first.startsWith(v))) {
+          return { cells: tds, matched: first };
+        }
+      }
+      return { cells: null, matched: null };
+    }, todayVariants);
 
-    const today = nowJST().date.replace(/-/g, '/');
+    console.log('AFAD 当日行:', JSON.stringify(rowData));
+    if (!rowData.cells) return null;
 
-    // 広告主: ミルクG
-    const advSelect = page.locator('select').first();
-    if (await advSelect.count() > 0) {
-      await advSelect.selectOption({ label: /ミルクG/ }).catch(() => {});
-    }
-
-    // 日付: 今日だけ
-    await page.evaluate((today) => {
-      const inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="date"]'));
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-      inputs.filter(i => i.placeholder?.includes('開始') || inputs.indexOf(i) === 0).forEach(i => {
-        setter.call(i, today);
-        i.dispatchEvent(new Event('input', { bubbles: true }));
-        i.dispatchEvent(new Event('change', { bubbles: true }));
-      });
-      inputs.filter(i => i.placeholder?.includes('終了') || inputs.indexOf(i) === 1).forEach(i => {
-        setter.call(i, today);
-        i.dispatchEvent(new Event('input', { bubbles: true }));
-        i.dispatchEvent(new Event('change', { bubbles: true }));
-      });
-    }, today);
-
-    // 検索実行
-    const searchBtn = page.locator('button').filter({ hasText: /^検索$/ }).first();
-    if (await searchBtn.count() > 0) {
-      await searchBtn.click();
-      await page.waitForTimeout(3000);
-    }
-
-    await page.screenshot({ path: path.join(downloadDir, `intraday-afad-${today}.png`) });
-
-    // 数値を取得
-    const data = await page.evaluate(() => {
-      const cells = Array.from(document.querySelectorAll('td, [class*="cell"], [class*="value"]'))
-        .map(el => el.textContent.trim())
-        .filter(t => t && /[\d,]/.test(t))
-        .slice(0, 30);
-      return { cells };
-    });
-    console.log('AFAD cells:', JSON.stringify(data.cells));
-
-    return { cells: data.cells };
+    return { cells: rowData.cells, rowMatch: rowData.matched };
   } catch (e) {
     console.error('AFAD取得エラー:', e.message);
     return null;
@@ -242,23 +271,37 @@ async function main() {
 
   msg += `\n`;
 
-  if (afad && afad.cells?.length > 0) {
+  if (afad && afad.cells?.length > 1) {
     msg += `【AFAD（実計測CV）】\n`;
-    const cvCells    = afad.cells.filter(c => /^\d+$/.test(c) && parseInt(c) < 500);
-    const spendCells = afad.cells.filter(c => /^[\d,]+$/.test(c) && parseInt(c.replace(/,/g, '')) > 10000);
-    msg += cvCells[0]    ? `　計測CV：${cvCells[0]}件\n` : `　計測CV：取得中\n`;
-    const cv    = parseInt(cvCells[0] || '0');
-    const spend = parseInt((spendCells[0] || '').replace(/,/g, ''));
-    if (spend > 0 && cv > 0) {
-      msg += `　CPA：${yen(spend / cv)}\n`;
-    } else if (cv > 0 && sn?.cells?.length > 0) {
-      // AFADにはCPAの分母となる広告費がないため、SNの広告費で代替計算
-      const snSpend = parseInt((sn.cells.find(c => parseInt(c.replace(/[¥,]/g, '')) > 10000) || '').replace(/[¥,]/g, ''));
-      if (snSpend > 0) msg += `　CPA：${yen(snSpend / cv)}\n`;
+    const tail = afad.cells.slice(1).map(c => c.trim());
+    const intVals = tail
+      .map(t => {
+        const m = String(t).replace(/,/g, '').match(/^(\d+)$/);
+        return m ? parseInt(m[1], 10) : null;
+      })
+      .filter(n => n != null && n > 0 && n < 1000000 && n !== 2024 && n !== 2025 && n !== 2026);
+    const spendVals = tail
+      .map(t => parseInt(String(t).replace(/[¥,\s]/g, ''), 10))
+      .filter(n => !isNaN(n) && n >= 1000);
+    const cvVal = intVals.filter(n => n < 50000).sort((a, b) => a - b)[0];
+    const afadSpend = spendVals.sort((a, b) => b - a)[0];
+    msg += cvVal ? `　計測CV：${cvVal}件\n` : `　計測CV：取得中\n`;
+    if (afadSpend > 0 && cvVal > 0) {
+      msg += `　CPA：${yen(afadSpend / cvVal)}\n`;
+    } else if (cvVal > 0 && sn?.cells?.length > 0) {
+      const snSpend = parseInt((sn.cells.find(c => parseInt(c.replace(/[¥,]/g, ''), 10) > 10000) || '').replace(/[¥,]/g, ''), 10);
+      if (snSpend > 0) msg += `　CPA：${yen(snSpend / cvVal)}\n`;
     }
   } else {
     msg += `【AFAD（実計測CV）】\n　データ取得できませんでした\n`;
   }
+
+  const triggerLabel =
+    GITHUB_EVENT === 'schedule' ? '定時（GitHub の schedule）'
+    : GITHUB_EVENT === 'workflow_dispatch' ? '手動（Actions の Run workflow）'
+    : GITHUB_EVENT ? GITHUB_EVENT
+    : 'ローカル等';
+  msg += `\n_実行トリガー: ${triggerLabel}_`;
 
   console.log('📤 送信メッセージ:\n' + msg);
   await sendSlack(msg);
